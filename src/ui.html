@@ -116,6 +116,12 @@ body.drag #empty .box,body.drag #mapwrap{outline:3px dashed var(--acc);outline-o
 .field{display:grid;grid-template-columns:1fr 110px;gap:10px;align-items:center;margin:8px 0}
 .field input{padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel2)}
 #toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:9px;font-weight:500;display:none;z-index:40;box-shadow:var(--shadow);max-width:80%}
+:root[lang=en] [data-lang=ru]{display:none!important}:root:not([lang=en]) [data-lang=en]{display:none!important}
+.devlist{display:grid;gap:4px;margin:8px 0 14px;max-height:52vh;overflow:auto}
+.devrow{display:grid;grid-template-columns:20px 1fr auto auto;gap:10px;align-items:center;padding:6px 8px;border-radius:7px;border:1px solid var(--line);cursor:pointer}
+.devrow:hover{background:var(--panel2)}.devrow input{accent-color:var(--acc)}
+.devrow .tag{font-size:11px;font-weight:600;color:var(--acc)}.devrow .tag.o{color:var(--mute)}
+.devh{font-weight:600;margin:10px 0 2px}
 @media (max-width:1050px){.body{grid-template-columns:1fr}.side{display:none}.body.showside .side{display:block;position:fixed;right:0;top:54px;bottom:0;width:340px;z-index:6;box-shadow:var(--shadow)}#sideToggle{display:inline-flex!important}.hide-narrow{display:none!important}.file{min-width:160px}}
 </style>
 </head>
@@ -124,6 +130,7 @@ body.drag #empty .box,body.drag #mapwrap{outline:3px dashed var(--acc);outline-o
   <div class="logo"><svg viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="var(--acc)"/><path d="M14 48 C24 48 20 33 31 32 C42 31 39 17 50 16" fill="none" stroke="#fff" stroke-width="5.2" stroke-linecap="round"/><circle cx="14" cy="48" r="6" fill="#fff"/><circle cx="50" cy="16" r="6" fill="#fff"/><circle cx="50" cy="16" r="2.6" fill="var(--acc)"/></svg>VELO FIX</div>
   <button class="file" id="fileBtn" disabled><b id="fileTitle">Нет тренировки</b><span id="fileSub">Откройте FIT-файл</span></button>
   <button class="btn ic" id="addBtn" title="Добавить файлы (FIT, GPX)">＋</button>
+  <button class="btn hide-narrow" id="devBtn" title="Открыть заезды с подключённого Garmin / Wahoo" style="display:none"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M9 6h6M12 18h.01"/></svg>С велокомпьютера</button>
   <div class="sp"></div>
   <div class="seg" id="viewSeg"><button data-v="after" class="on">Исправлено</button><button data-v="before">Исходник</button></div>
   <div class="sp"></div>
@@ -132,6 +139,7 @@ body.drag #empty .box,body.drag #mapwrap{outline:3px dashed var(--acc);outline-o
   <div class="split"><button class="btn p" id="saveBtn" disabled>Сохранить FIT</button><button class="btn p" id="saveMenuBtn" disabled title="Другие форматы">▾</button></div>
   <button class="btn ic" id="sideToggle" style="display:none" title="Сводка">☰</button>
   <a class="upd" id="upd" target="_blank" rel="noopener"></a>
+  <button class="btn ic notr" id="langBtn" title="Язык / Language" style="font-size:11.5px;font-weight:700"></button>
   <button class="btn ic" id="themeBtn" title="Тема"></button>
   <button class="btn ic" id="helpBtn" title="Как пользоваться">?</button>
 </div>
@@ -148,7 +156,7 @@ body.drag #empty .box,body.drag #mapwrap{outline:3px dashed var(--acc);outline-o
         <svg viewBox="0 0 64 64" width="56" height="56"><rect width="64" height="64" rx="14" fill="var(--acc)"/><path d="M14 48 C24 48 20 33 31 32 C42 31 39 17 50 16" fill="none" stroke="#fff" stroke-width="5.2" stroke-linecap="round"/><circle cx="14" cy="48" r="6" fill="#fff"/><circle cx="50" cy="16" r="6" fill="#fff"/></svg>
         <h2>Перетащите сюда FIT-файл</h2>
         <p>Можно сразу несколько тренировок, а также GPX с реальным маршрутом — по нему восстановятся участки без GPS.</p>
-        <button class="btn p" id="openBtn" style="height:38px;padding:0 20px">Открыть файлы</button>
+        <button class="btn p" id="openBtn" style="height:38px;padding:0 20px">Открыть файлы</button> <button class="btn" id="devBtn2" style="height:38px;padding:0 16px;display:none">С велокомпьютера</button>
         <p style="margin:14px 0 0;font-size:12px">Файлы обрабатываются только на этом компьютере. <button class="lnk" id="helpLink">Как пользоваться</button></p>
       </div></div>
     </div>
@@ -176,25 +184,45 @@ body.drag #empty .box,body.drag #mapwrap{outline:3px dashed var(--acc);outline-o
 <div class="menu" id="saveMenu"></div>
 <div class="modal" id="helpModal"><div class="in">
   <h2>Как пользоваться VELO FIX <span class="mute" style="font-size:13px;font-weight:500">версия /*VERSION*/</span></h2>
-  <ol>
+  <ol data-lang="ru">
     <li><b>Откройте файлы.</b> Перетащите в окно один или несколько <b>.fit</b> с велокомпьютера (или нажмите «＋»). Если есть GPX с реальным маршрутом (нарисованный в gpx.studio, трек из komoot, запись с телефона) — добавьте его: по нему восстановятся участки, где пропал GPS.</li>
-    <li><b>Программа сразу всё исправит:</b> ложные километры, «фантомное движение» (GPS «едет» 100+ км/ч, пока вы стоите), GPS-телепортации, дубликаты записей, нереальную максимальную скорость. Пульс, каденс, мощность, высота и время не меняются.</li>
+    <li><b>Программа сразу всё исправит:</b> ложные километры, «фантомное движение» (GPS «едет» 100+ км/ч, пока вы стоите), GPS-телепортации, дубликаты записей, нереальную максимальную скорость, выбросы пульса и мощности. Каденс, высота и время не меняются.</li>
     <li><b>Проверьте результат.</b> Справа — сводка: зачёркнутым показано, что было. Нажмите на исправление — карта покажет участок. Переключатель «Исправлено / Исходник» сверху показывает трек до и после. Наведите курсор на трек или на график — увидите время, скорость, пульс, мощность. Выделите участок на графике мышью — получите статистику отрезка.</li>
     <li><b>Несколько файлов.</b> Переключайтесь между тренировками кнопкой с названием слева вверху. Если велокомпьютер разбил заезд на части — нажмите «Склеить».</li>
-    <li><b>Сохраните.</b> «Сохранить FIT» — файл для Strava / Garmin Connect. Стрелка ▾ рядом — GPX, отчёт, таблица изменений, архив, сохранение всех тренировок сразу и выбор постоянной папки. «PNG» — картинка карты с треком.</li>
+    <li><b>Сохраните.</b> «Сохранить FIT» — файл для Strava / Garmin Connect. Стрелка ▾ рядом — GPX, TCX, отчёт «до и после», таблица изменений, архив, сохранение всех тренировок сразу и выбор постоянной папки. «PNG» — картинка карты с треком.</li>
     <li><b>Обрезка и разделение.</b> Выделите участок на графике → «Оставить только его». Кнопка «✂ Разделить» и щелчок по графику или треку делит тренировку на две части. Если в конце записи вы ехали на транспорте, программа сама предложит обрезать.</li>
     <li><b>Загрузка в Strava:</b> удалите исходную тренировку, затем «+» → «Загрузить действие» → «Файл» → выберите *_RESTORED.fit.</li>
+  </ol>
+  <ol data-lang="en">
+    <li><b>Open files.</b> Drop one or more <b>.fit</b> files from your bike computer into the window (or press “＋” / “From bike computer”). If you have a GPX of the real route (drawn in gpx.studio, a komoot tour, a phone recording) — add it too: sections where GPS dropped out will be restored from it.</li>
+    <li><b>Everything is fixed right away:</b> false kilometres, “phantom movement” (GPS “rides” at 100+ km/h while you stand still), GPS teleports, duplicate records, impossible max speed, heart-rate and power spikes. Cadence, altitude and time are not changed.</li>
+    <li><b>Check the result.</b> The summary is on the right: struck-through values show what it was. Click a fix to see it on the map. “Fixed / Original” at the top shows the track after and before. Hover the track or the chart to see time, speed, heart rate and power. Drag over the chart to get stats for a segment.</li>
+    <li><b>Several files.</b> Switch rides with the title button at the top left. If the bike computer split a ride into parts — press “Merge”.</li>
+    <li><b>Save.</b> “Save FIT” — the file for Strava / Garmin Connect. The ▾ arrow next to it — GPX, TCX, a before/after report, change log, ZIP, saving all rides at once and choosing a permanent folder. “PNG” — a picture of the map.</li>
+    <li><b>Trim and split.</b> Select a segment on the chart → “Keep only this”. “✂ Split” and a click on the chart or the track splits the ride in two. If you rode in a vehicle at the end, the app offers to trim it.</li>
+    <li><b>Uploading to Strava:</b> delete the original activity, then “+” → “Upload activity” → “File” → choose *_RESTORED.fit.</li>
   </ol>
   <h2 style="margin-top:18px">Параметры спортсмена</h2>
   <div class="field"><span>Максимальный пульс, уд/мин</span><input type="number" id="setHr" min="120" max="230"></div>
   <div class="field"><span>FTP (функциональная пороговая мощность), Вт</span><input type="number" id="setFtp" min="80" max="600"></div>
   <div class="field"><span>Вес, кг (для Вт/кг)</span><input type="number" id="setW" min="30" max="200" step="0.5"></div>
+  <label class="opt" style="margin:10px 0"><input type="checkbox" id="setSensor"> <span>Исправлять выбросы пульса и мощности</span></label>
+  <div id="shortcutRow" style="display:none;margin:6px 0 10px"><button class="btn sm" id="shortcutBtn">Создать ярлык на рабочем столе</button></div>
   <p class="mute" style="font-size:12px">Карта загружается из интернета (OpenStreetMap, Esri); если интернета нет — выберите «Без карты». Сами файлы никуда не отправляются.</p>
   <div style="text-align:right;margin-top:10px"><button class="btn p" id="helpClose">Готово</button></div>
+</div></div>
+<div class="modal" id="devModal"><div class="in">
+  <h2>С велокомпьютера</h2>
+  <div class="mute" id="devState">Ищу устройства…</div>
+  <div class="devlist" id="devList"></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn" id="devRefresh">Обновить</button><button class="btn" id="devClose">Закрыть</button><button class="btn p" id="devOpen" disabled>Открыть выбранные</button></div>
 </div></div>
 <div id="toast"></div>
 <script>
 /*CORE*/
+</script>
+<script>
+/*I18N*/
 </script>
 <script>
 (() => {
@@ -202,7 +230,7 @@ body.drag #empty .box,body.drag #mapwrap{outline:3px dashed var(--acc);outline-o
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const store = { get(k, d) { try { const v = localStorage.getItem('velofix.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem('velofix.' + k, JSON.stringify(v)); } catch (e) {} } };
-const fmt = (v, d = 1) => v == null || !isFinite(v) ? '—' : v.toLocaleString('ru-RU', { minimumFractionDigits: d, maximumFractionDigits: d });
+const fmt = (v, d = 1) => v == null || !isFinite(v) ? '—' : v.toLocaleString(VF_I18N.lang === 'en' ? 'en-US' : 'ru-RU', { minimumFractionDigits: d, maximumFractionDigits: d });
 const hms = s => s == null ? '—' : VF.hms(Math.round(s));
 function toast(msg, ms = 3500) { const t = $('toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', ms); }
 
@@ -216,7 +244,7 @@ const isDark = () => getComputedStyle(document.documentElement).getPropertyValue
 const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
 // ================= settings =================
-const S = { files: [], cur: null, gpx: [], view: 'after', color: store.get('color', 'speed'), tiles: store.get('tiles', 'map'), maxHr: store.get('maxHr', null), ftp: store.get('ftp', 250), weight: store.get('weight', 75), straight: store.get('straight', false), sel: null, fixSel: null };
+const S = { files: [], cur: null, gpx: [], view: 'after', color: store.get('color', 'speed'), tiles: store.get('tiles', 'map'), maxHr: store.get('maxHr', null), ftp: store.get('ftp', 250), weight: store.get('weight', 75), straight: store.get('straight', false), sensorFix: store.get('sensorFix', true), sel: null, fixSel: null };
 function setStraight(v) { S.straight = v; store.set('straight', v); for (const f of S.files) f.res = null; showCurrent(); }
 
 // ================= files =================
@@ -238,7 +266,7 @@ async function addFiles(list) {
 const cur = () => S.files.find(f => f.id === S.cur);
 function process(f) {
   if (f.res || f.err) return;
-  try { f.res = VF.run(f.bytes, S.gpx, { fillStraight: S.straight, trim: f.trim || null }); f.stats = stats(f.res); }
+  try { f.res = VF.run(f.bytes, S.gpx, { fillStraight: S.straight, trim: f.trim || null, sensorFix: S.sensorFix }); f.stats = stats(f.res); }
   catch (e) { console.error(e); f.err = e.message || String(e); }
 }
 function fileStatus(f) { if (f.err) return ['var(--bad)', 'ошибка']; if (!f.res) return ['var(--line)', '']; const n = fixList(f.res).length; return n ? ['var(--warn)', `исправлено ${n}`] : ['var(--ok)', 'в порядке']; }
@@ -282,8 +310,8 @@ addEventListener('keydown', e => { if (e.key === 'Escape') { closeMenus(); $('he
 $('fileBtn').onclick = () => {
   const m = $('fileMenu');
   let h = '<div class="cap">Тренировки</div>';
-  for (const f of S.files) { const [c, st] = fileStatus(f); h += `<button class="fileit" data-id="${f.id}"><span class="dot" style="background:${c}"></span><span>${esc(f.name)}${f.id === S.cur ? ' ✓' : ''}</span><small>${st}</small><span class="x" data-del="${f.id}" title="Убрать">×</span></button>`; }
-  if (S.gpx.length) { h += '<div class="sepl"></div><div class="cap">Маршруты GPX</div>'; for (const g of S.gpx) h += `<button class="fileit" disabled><span class="dot" style="background:var(--mute)"></span><span>${esc(g.name)}</span><small>эталон</small><span class="x" data-gdel="${esc(g.name)}">×</span></button>`; }
+  for (const f of S.files) { const [c, st] = fileStatus(f); h += `<button class="fileit" data-id="${f.id}"><span class="dot" style="background:${c}"></span><span class="notr">${esc(f.name)}${f.id === S.cur ? ' ✓' : ''}</span><small>${st}</small><span class="x" data-del="${f.id}" title="Убрать">×</span></button>`; }
+  if (S.gpx.length) { h += '<div class="sepl"></div><div class="cap">Маршруты GPX</div>'; for (const g of S.gpx) h += `<button class="fileit" disabled><span class="dot" style="background:var(--mute)"></span><span class="notr">${esc(g.name)}</span><small>эталон</small><span class="x" data-gdel="${esc(g.name)}">×</span></button>`; }
   h += '<div class="sepl"></div><button data-act="add">＋ Добавить файлы…</button>';
   m.innerHTML = h; openMenu(m, $('fileBtn'));
   m.querySelectorAll('[data-id]').forEach(b => b.onclick = e => { if (e.target.dataset.del) { S.files = S.files.filter(f => f.id !== +e.target.dataset.del); if (S.cur === +e.target.dataset.del) S.cur = S.files.length ? S.files[0].id : null; closeMenus(); showCurrent(true); return; } S.cur = +b.dataset.id; closeMenus(); showCurrent(true); });
@@ -342,6 +370,9 @@ function fixList(r) {
     out.push({ sev: 'warn', a: A, b: B, groups, title: 'GPS-телепортации', sub: `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'точка' : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? 'точки' : 'точек'} на ${groups.length} участк${groups.length === 1 ? 'е' : 'ах'}`, val: String(n), label: 'Удалённые точки GPS' }); }
   for (const g of r.runs.filter(x => x.n > 15)) out.push({ sev: 'info', a: g.a, b: g.b, title: 'Пропуск GPS восстановлен', sub: `${L(g.t0)}–${L(g.t1)} · ${g.srcs.join(' → ')} · ${g.conf}`, val: fmt(g.sensLen != null ? g.sensLen / 1000 : g.len / 1000, 1) + ' км', label: 'Восстановлено по ' + g.srcs.join(' → ') });
   if (r.phantomTimer) out.push({ sev: 'acc', a: r.phantomBlocks[0].a, b: r.phantomBlocks[r.phantomBlocks.length - 1].b, title: 'Время движения', sub: 'фантом считался ездой', val: '−' + hms(r.phantomTimer), label: 'Время движения пересчитано' });
+  const sf = r.sensorFix || { hr: [], pwr: [] };
+  if (sf.hr.length) { const n = sf.hr.reduce((a, x) => a + x.n, 0), mx = Math.max(...sf.hr.map(x => x.max)); out.push({ sev: 'warn', a: Math.max(0, sf.hr[0].a - 20), b: Math.min(r.N - 1, sf.hr[sf.hr.length - 1].b + 20), groups: sf.hr.map(x => ({ a: Math.max(0, x.a - 10), b: Math.min(r.N - 1, x.b + 10) })), title: 'Выбросы пульса', sub: `${sf.hr.length > 1 ? sf.hr.length + ' × · ' : L(sf.hr[0].t0) + ' · '}до ${mx} уд/мин · помехи датчика`, val: String(n), label: `Выбросы пульса до ${mx}` }); }
+  if (sf.pwr.length) { const n = sf.pwr.reduce((a, x) => a + x.n, 0), mx = Math.max(...sf.pwr.map(x => x.max)); out.push({ sev: 'warn', a: Math.max(0, sf.pwr[0].a - 20), b: Math.min(r.N - 1, sf.pwr[sf.pwr.length - 1].b + 20), groups: sf.pwr.map(x => ({ a: Math.max(0, x.a - 10), b: Math.min(r.N - 1, x.b + 10) })), title: 'Выбросы мощности', sub: `${sf.pwr.length > 1 ? sf.pwr.length + ' × · ' : L(sf.pwr[0].t0) + ' · '}до ${mx} Вт · сбой измерителя`, val: String(n), label: `Выбросы мощности до ${mx} Вт` }); }
   if (r.dups.length) out.push({ sev: 'info', a: r.dups[0], b: r.dups[0], title: 'Дубликаты записей', sub: 'побайтовые копии удалены', val: String(r.dups.length), label: 'Дубликат записи' });
   return out;
 }
@@ -404,13 +435,15 @@ function renderSide() {
     : '<div class="mute" style="padding:0 18px">Нет данных пульса</div>';
 }
 $('chkBtn').onclick = () => $('chk').classList.toggle('open');
-const openSettings = () => { $('setHr').value = S.maxHr || (cur() && cur().stats ? cur().stats.hrMaxCfg : 190); $('setFtp').value = S.ftp; $('setW').value = S.weight; $('helpModal').classList.add('open'); };
+const openSettings = () => { $('setHr').value = S.maxHr || (cur() && cur().stats ? cur().stats.hrMaxCfg : 190); $('setFtp').value = S.ftp; $('setW').value = S.weight; $('setSensor').checked = S.sensorFix; $('shortcutRow').style.display = IS_APP ? '' : 'none'; $('helpModal').classList.add('open'); };
 $('ftpBtn').onclick = openSettings; $('hrBtn').onclick = openSettings;
 $('helpBtn').onclick = openSettings; $('helpLink').onclick = openSettings;
 $('helpClose').onclick = () => {
   const hr = +$('setHr').value, ftp = +$('setFtp').value, w = +$('setW').value;
   if (hr >= 120 && hr <= 230) { S.maxHr = hr; store.set('maxHr', hr); } if (ftp >= 50) { S.ftp = ftp; store.set('ftp', ftp); } if (w >= 30) { S.weight = w; store.set('weight', w); }
-  $('helpModal').classList.remove('open'); for (const f of S.files) if (f.res) f.stats = stats(f.res); renderSide();
+  $('helpModal').classList.remove('open');
+  if ($('setSensor').checked !== S.sensorFix) { S.sensorFix = $('setSensor').checked; store.set('sensorFix', S.sensorFix); for (const f of S.files) f.res = null; showCurrent(); return; }
+  for (const f of S.files) if (f.res) f.stats = stats(f.res); renderSide();
 };
 $('helpModal').onclick = e => { if (e.target === $('helpModal')) $('helpClose').onclick(); };
 $('sideToggle').onclick = () => $('body').classList.toggle('showside');
@@ -667,16 +700,18 @@ async function saveFile(name, data, type) {
 const baseName = f => f.name.replace(/\.fit$/i, '');
 const outputs = f => { const enc = new TextEncoder(), b = baseName(f), r = f.res; return {
   fit: [b + '_RESTORED.fit', r.out, 'application/octet-stream'], gpx: [b + '_RESTORED.gpx', enc.encode(VF.toGpx(r)), 'application/gpx+xml'],
-  md: [b + '_REPORT.md', enc.encode(VF.toReport(r, f.name)), 'text/markdown'], csv: [b + '_AUDIT.csv', enc.encode(VF.toCsv(r)), 'text/csv'] }; };
+  tcx: [b + '_RESTORED.tcx', enc.encode(VF.toTcx(r)), 'application/xml'],
+  md: [b + '_REPORT.md', enc.encode(VF_I18N.tr(VF.toReport(r, f.name))), 'text/markdown'], csv: [b + '_AUDIT.csv', enc.encode(VF_I18N.tr(VF.toCsv(r))), 'text/csv'] }; };
 $('saveBtn').onclick = () => { const f = cur(); if (f && f.res) saveFile(...outputs(f).fit); };
 $('saveMenuBtn').onclick = () => {
   const m = $('saveMenu'); const fits = S.files.length;
-  m.innerHTML = `<div class="cap">Эта тренировка</div><button data-k="fit">FIT для Strava / Garmin</button><button data-k="gpx">GPX — трек для других сервисов</button><button data-k="png">PNG — картинка карты</button><button data-k="md">Отчёт об исправлениях (.md)</button><button data-k="csv">Таблица изменений (.csv)</button><button data-k="zip">Всё архивом (.zip)</button>
+  m.innerHTML = `<div class="cap">Эта тренировка</div><button data-k="fit">FIT для Strava / Garmin</button><button data-k="gpx">GPX — трек для других сервисов</button><button data-k="tcx">TCX — для TrainingPeaks, Polar и др.</button><button data-k="png">PNG — картинка карты</button><button data-k="html">Отчёт «до и после» (.html)</button><button data-k="md">Отчёт об исправлениях (.md)</button><button data-k="csv">Таблица изменений (.csv)</button><button data-k="zip">Всё архивом (.zip)</button>
     <div class="sepl"></div><div class="cap">Все тренировки</div><button data-k="all" ${fits < 2 ? 'disabled' : ''}>Сохранить все исправленные FIT (${fits})</button>
     <div class="sepl"></div><div class="cap">Куда сохранять</div>${canPick ? `<button data-k="dir">${dirHandle ? 'Папка: ' + esc(dirHandle.name) + ' — изменить' : 'Выбрать постоянную папку…'}</button>${dirHandle ? '<button data-k="ask">Спрашивать каждый раз</button>' : ''}` : '<button disabled>В «Загрузки» (выбор папки недоступен)</button>'}`;
   openMenu(m, $('saveMenuBtn'), true);
   m.querySelectorAll('button[data-k]').forEach(b => b.onclick = async () => { closeMenus(); const k = b.dataset.k, f = cur();
     if (k === 'png') return exportPng();
+    if (k === 'html') return exportReport();
     if (k === 'dir') return pickDir(); if (k === 'ask') return forgetDir();
     if (k === 'all') return saveAll();
     const o = outputs(f);
@@ -724,7 +759,111 @@ async function exportPng() {
   saveFile(baseName(f) + '_map.png', blob, 'image/png');
 }
 
-setTiles(S.tiles); applyTheme(); showCurrent();
+setTiles(S.tiles); applyTheme();
+const IS_APP = location.origin === 'http://127.0.0.1:47815';
+const api = (path, opt = {}) => fetch(path, { ...opt, headers: { 'X-VeloFix': '1', ...(opt.headers || {}) } });
+// ================= language =================
+function applyLang(l) { VF_I18N.set(l); $('langBtn').textContent = l === 'en' ? 'RU' : 'EN'; showCurrent(); renderSaveTo(); applyTheme(); }
+$('langBtn').onclick = () => { const l = VF_I18N.lang === 'en' ? 'ru' : 'en'; store.set('lang', l); applyLang(l); };
+showCurrent(); applyLang(store.get('lang', /^ru|^uk|^be|^kk/i.test(navigator.language || 'ru') ? 'ru' : 'en'));
+// ================= one-click update (exe only) =================
+$('upd').addEventListener('click', async e => {
+  if (!IS_APP) return; e.preventDefault(); const u = $('upd');
+  if (u.dataset.state === 'busy') return;
+  if (u.dataset.state === 'ready') { u.dataset.state = 'busy'; u.textContent = 'Перезапуск…'; try { await api('/api/restart', { method: 'POST' }); } catch (x) {} setTimeout(() => window.close(), 600); return; }
+  u.dataset.state = 'busy'; u.textContent = 'Загружаю обновление…';
+  try { const j = await (await api('/api/update', { method: 'POST' })).json();
+    if (j.ok) { u.dataset.state = 'ready'; u.textContent = 'Обновление установлено — перезапустить'; }
+    else { u.dataset.state = ''; u.textContent = `Обновить до ${u.dataset.v}`; toast('Не удалось обновить: ' + j.error, 7000); if (/архив|GitHub|прав/.test(j.error)) window.open(u.href, '_blank'); } }
+  catch (x) { u.dataset.state = ''; u.textContent = `Обновить до ${u.dataset.v}`; toast('Не удалось обновить: ' + x.message, 6000); }
+});
+// ================= desktop shortcut =================
+$('shortcutBtn').onclick = async () => { try { const j = await (await api('/api/shortcut', { method: 'POST' })).json(); toast(j.ok ? 'Ярлык создан на рабочем столе' : 'Не удалось создать ярлык: ' + (j.error === 'temp' ? 'распакуйте архив в папку и запустите программу оттуда' : j.error), 6000); } catch (e) { toast('Не удалось создать ярлык'); } };
+// ================= bike computer (Garmin / Wahoo) =================
+const DEV = { list: [], seen: new Set(store.get('devSeen', [])), banner: '' };
+const devKey = f => f.name + '|' + f.size;
+function markSeen(f) { DEV.seen.add(devKey(f)); store.set('devSeen', [...DEV.seen].slice(-2000)); }
+if (IS_APP) { $('devBtn').style.display = ''; $('devBtn2').style.display = ''; }
+$('devBtn').onclick = $('devBtn2').onclick = () => openDevices(true);
+$('devClose').onclick = () => $('devModal').classList.remove('open');
+$('devModal').onclick = e => { if (e.target === $('devModal')) $('devModal').classList.remove('open'); };
+$('devRefresh').onclick = () => openDevices(true);
+async function openDevices(mtp) {
+  $('devModal').classList.add('open'); $('devState').textContent = 'Ищу устройства…'; $('devList').innerHTML = ''; $('devOpen').disabled = true;
+  let j; try { j = await (await api('/api/devices' + (mtp ? '?mtp=1' : ''))).json(); } catch (e) { $('devState').textContent = 'Работает только в программе VELO_FIX.exe'; return; }
+  DEV.list = j.devices || [];
+  if (!DEV.list.length) { $('devState').innerHTML = 'Устройства не найдены. Подключите велокомпьютер кабелем USB и нажмите «Обновить».'; return; }
+  $('devState').textContent = '';
+  const dt = ms => new Date(ms).toLocaleString(VF_I18N.lang === 'en' ? 'en-GB' : 'ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  let h = '';
+  DEV.list.forEach((d, di) => { h += `<div class="devh notr">${esc(d.name)}</div>`;
+    d.files.forEach((f, fi) => { const isNew = !DEV.seen.has(devKey(f));
+      h += `<label class="devrow"><input type="checkbox" data-d="${di}" data-f="${fi}" ${isNew && fi < 5 ? 'checked' : ''}><span><span class="notr">${esc(f.name)}</span> <span class="mute num">${dt(f.mtime)}</span></span><span class="mute num">${fmt(f.size / 1024, 0)} KB</span><span class="tag ${isNew ? '' : 'o'}">${isNew ? 'новый' : 'открыт'}</span></label>`; }); });
+  $('devList').innerHTML = h;
+  const upd = () => { $('devOpen').disabled = !$('devList').querySelector('input:checked'); };
+  $('devList').querySelectorAll('input').forEach(i => i.onchange = upd); upd();
+}
+$('devOpen').onclick = async () => {
+  const sel = [...$('devList').querySelectorAll('input:checked')].map(i => DEV.list[+i.dataset.d].files[+i.dataset.f]);
+  $('devOpen').disabled = true; $('devState').textContent = 'Читаю файлы с устройства…';
+  const files = [];
+  for (const f of sel) { try { const r = await api('/api/devfile?id=' + encodeURIComponent(f.id)); if (!r.ok) throw new Error(await r.text()); files.push(new File([await r.arrayBuffer()], f.name)); markSeen(f); } catch (e) { toast(f.name + ': ' + e.message, 6000); } }
+  $('devModal').classList.remove('open');
+  if (files.length) addFiles(files);
+};
+// light polling of USB-drive devices (MTP needs a click: it is slow)
+if (IS_APP) { const poll = async () => { try { const j = await (await api('/api/devices')).json(); const n = (j.devices || []).reduce((a, d) => a + d.files.filter(f => !DEV.seen.has(devKey(f))).length, 0);
+  const key = (j.devices || []).map(d => d.name).join(',') + n; if (n && key !== DEV.banner) { DEV.banner = key; toast(`Подключён ${j.devices[0].name}: ${n} новых заездов — кнопка «С велокомпьютера»`, 7000); } if (!n) DEV.banner = ''; } catch (e) {} };
+  setInterval(poll, 10000); setTimeout(poll, 1500); }
+
+// ================= before / after report =================
+async function mapImage(r, view, W, H) {
+  const keep = M.view; M.view = view;
+  const bb = M.bounds(0, r.N - 1, true); if (!bb) { M.view = keep; return null; }
+  const v = Object.assign({ w: W, h: H }, M.fitBox(bb, W, H, 30));
+  const cv = document.createElement('canvas'); cv.width = W * 2; cv.height = H * 2; const ctx = cv.getContext('2d');
+  if (S.tiles !== 'none') await new Promise(res => { let left = 0, done = false; const fin = () => { if (!done) { done = true; res(); } }; const n = 2 ** v.z;
+    for (let x = Math.floor((v.cx - W / 2) / TILE); x <= Math.floor((v.cx + W / 2) / TILE); x++) for (let y = Math.floor((v.cy - H / 2) / TILE); y <= Math.floor((v.cy + H / 2) / TILE); y++) {
+      if (y < 0 || y >= n) continue; const im = M.tile(S.tiles, v.z, ((x % n) + n) % n, y, () => { if (--left <= 0) fin(); }); if (!im.ok && !im.bad) left++; }
+    if (left <= 0) fin(); setTimeout(fin, 5000); });
+  M.paint(ctx, v, { scale: 2, clean: true }); let url = null;
+  try { url = cv.toDataURL('image/png'); } catch (e) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cv.width, cv.height); M.paint(ctx, v, { scale: 2, clean: true, noTiles: true }); url = cv.toDataURL('image/png'); }
+  M.view = keep; M.draw(); return url;
+}
+async function exportReport() {
+  const f = cur(), r = f && f.res; if (!r) return;
+  const T = VF_I18N.tr, en = VF_I18N.lang === 'en';
+  toast(T('Готовлю отчёт…'));
+  const [imgB, imgA] = [await mapImage(r, 'before', 560, 420), await mapImage(r, 'after', 560, 420)];
+  const b = r.before, a = r.after, st = f.stats;
+  const row = (name, x, y, u = '', d = 1) => { const fx = v => typeof v === 'number' ? fmt(v, d) : (v ?? '—'); const ch = typeof x === 'number' && typeof y === 'number' && Math.abs(x - y) > Math.pow(10, -d) / 2;
+    return `<tr><td>${T(name)}</td><td class="n">${fx(x)} ${T(u)}</td><td class="n${ch ? ' c' : ''}">${fx(y)} ${T(u)}</td></tr>`; };
+  const hmsRow = (name, x, y) => `<tr><td>${T(name)}</td><td class="n">${hms(x)}</td><td class="n${Math.abs((x || 0) - (y || 0)) >= 1 ? ' c' : ''}">${hms(y)}</td></tr>`;
+  const hr0 = (() => { let m = 0; for (const x of r.R) m = Math.max(m, x.hr0 ?? x.hr ?? 0); return m || null; })(), p0 = (() => { let m = 0; for (const x of r.R) m = Math.max(m, x.pwr0 ?? x.pwr ?? 0); return m || null; })();
+  const fx = fixList(r);
+  const chk = r.checks.list.map(c => `<li class="${c.pass ? 'ok' : c.info ? 'in' : 'no'}">${c.pass ? '✓' : c.info ? 'ℹ' : '⚠'} ${esc(T(c.name))} <span>${esc(T(c.detail || ''))}</span></li>`).join('');
+  const title = T(rideTitle(r));
+  const html = `<!doctype html><html lang="${en ? 'en' : 'ru'}"><head><meta charset="utf-8"><title>${esc(title)} — VELO FIX</title><style>
+body{font:14px/1.5 "Segoe UI",system-ui,sans-serif;color:#14171c;max-width:1180px;margin:24px auto;padding:0 20px}h1{font-size:24px;margin:0}h2{font-size:17px;margin:26px 0 8px;border-bottom:2px solid #fc4c02;padding-bottom:4px}
+.sub{color:#5f6773}.maps{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}.maps figure{margin:0}.maps img{width:100%;border:1px solid #e3e6ea;border-radius:8px}.maps figcaption{font-weight:600;margin-bottom:4px}
+table{border-collapse:collapse;width:100%;max-width:680px}td,th{padding:6px 10px;border-bottom:1px solid #e3e6ea;text-align:left}.n{text-align:right;font-variant-numeric:tabular-nums}.c{color:#fc4c02;font-weight:700}
+.fx{list-style:none;padding:0}.fx li{padding:6px 0;border-bottom:1px solid #eef0f2}.fx b{display:inline-block;min-width:260px}.fx span{color:#5f6773}.fx em{float:right;font-style:normal;font-weight:600}
+.ck{list-style:none;padding:0;font-size:13px}.ck li{padding:3px 0}.ck .ok{color:#059669}.ck .no{color:#d97706}.ck .in{color:#5f6773}.ck span{color:#5f6773}
+footer{margin-top:30px;color:#8b93a1;font-size:12px}@media print{body{margin:0}h2{break-after:avoid}.maps{break-inside:avoid}}</style></head><body>
+<h1>${esc(title)}</h1><div class="sub">${esc(T('Отчёт об исправлении трека'))} · <span>${esc(f.name)}</span> · VELO FIX ${APP_VERSION}</div>
+<div class="maps"><figure><figcaption>${T('До исправления')}</figcaption>${imgB ? `<img src="${imgB}">` : ''}</figure><figure><figcaption>${T('После исправления')}</figcaption>${imgA ? `<img src="${imgA}">` : ''}</figure></div>
+<h2>${T('Показатели')}</h2><table><tr><th></th><th class="n">${T('До')}</th><th class="n">${T('После')}</th></tr>
+${row('Дистанция', b.dist / 1000, a.dist / 1000, 'км', 2)}${row('Средняя скорость', b.avg, a.avg, 'км/ч')}${row('Макс. скорость', b.max, a.max, 'км/ч')}
+${hmsRow('Время движения', b.timer, a.timer)}${hmsRow('Общее время', b.elapsed, a.elapsed)}${row('Набор высоты', b.asc, a.asc, 'м', 0)}
+${st.hrMax ? row('Макс. пульс', hr0, st.hrMax, 'уд/мин', 0) : ''}${st.hasP ? row('Макс. мощность', p0, st.pMax, 'Вт', 0) : ''}
+${row('Записи без координат', r.R.filter(x => x.lat == null).length, r.R2.filter(x => x.lat == null).length, '', 0)}</table>
+<h2>${T('Что исправлено')}</h2>${fx.length ? `<ul class="fx">${fx.map(x => `<li><b>${esc(T(x.title))}</b> <span>${esc(T(x.sub))}</span><em>${esc(T(x.val))}</em></li>`).join('')}</ul>` : `<p>${T('Ошибок не найдено — файл в порядке.')}</p>`}
+<h2>${T('Проверки файла')}</h2><ul class="ck">${chk}</ul>
+<footer>${T('Время, каденс, высота и другие показания датчиков не изменялись; пульс и мощность — только в местах явных сбоев датчика. Координаты на восстановленных участках вычислены по эталонному маршруту и датчику скорости.')} ${S.tiles !== 'none' ? tileAttr(S.tiles) : ''}</footer>
+</body></html>`;
+  saveFile(baseName(f) + '_REPORT.html', new TextEncoder().encode(html), 'text/html');
+}
+
 // ================= update check =================
 const APP_VERSION = '/*VERSION*/', REPO = 'denbogos/velo-fix';
 (async () => {
@@ -737,7 +876,7 @@ const APP_VERSION = '/*VERSION*/', REPO = 'denbogos/velo-fix';
       store.set('updChecked', Date.now());
     }
     const newer = (a, b) => { const x = a.split('.').map(Number), y = b.split('.').map(Number); for (let k = 0; k < 3; k++) { if ((x[k] || 0) > (y[k] || 0)) return true; if ((x[k] || 0) < (y[k] || 0)) return false; } return false; };
-    if (info && info.v && newer(info.v, APP_VERSION)) { const u = $('upd'); u.href = info.url; u.textContent = `Доступна версия ${info.v} ↗`; u.title = info.notes || 'Скачать новую версию'; u.classList.add('on'); }
+    if (info && info.v && newer(info.v, APP_VERSION)) { const u = $('upd'); u.href = info.url; u.textContent = IS_APP ? `Обновить до ${info.v}` : `Доступна версия ${info.v} ↗`; u.title = info.notes || 'Скачать новую версию'; u.classList.add('on'); u.dataset.v = info.v; }
   } catch (e) { /* offline — silently ignore */ }
 })();
 window.__velofix = { S, M, addFiles };

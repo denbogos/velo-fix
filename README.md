@@ -1,5 +1,7 @@
 # VELO FIX
 
+*English: a free Windows tool that fixes cycling FIT files — phantom speeds, odometer and GPS jumps, GPS gaps, heart-rate and power spikes — and exports FIT, GPX, TCX and a before/after report. The interface is available in English (EN/RU button). Download the ZIP from [Releases](../../releases/latest), unpack it and run `VELO_FIX.exe`.*
+
 **Исправление GPS-треков велотренировок (FIT) для Windows.** Бесплатно, без установки, файлы обрабатываются только на вашем компьютере.
 
 ## Скачать
@@ -15,9 +17,10 @@
 - **«Фантомное движение»** — GPS «едет» 100+ км/ч, пока вы стоите (дрейф или подмена GPS в городе): километры, скорость и время движения пересчитываются.
 - **GPS-телепортации** — точки, сместившиеся дальше, чем вы реально проехали по датчику колеса.
 - **Дубликаты записей** и нереальную максимальную скорость.
+- **Выбросы пульса и мощности** — пульс 230 от статики ремня, 3000 Вт на ровном месте: заменяются плавным переходом.
 - **Пропуски GPS** — достраивает по вашему GPX маршрута (gpx.studio, komoot, запись телефона) или соединяет прямой.
 
-Пульс, каденс, мощность, высота и время **не изменяются**. Структура FIT сохраняется — файл загружается в Strava и Garmin Connect.
+Каденс, высота и время **не изменяются**; пульс и мощность — только в местах явных сбоев. Структура FIT сохраняется — файл загружается в Strava и Garmin Connect.
 
 ## Возможности
 
@@ -25,8 +28,10 @@
 - Профиль высоты, скорости, пульса, мощности; статистика выделенного отрезка
 - Сводка «было / стало», зоны пульса и мощности (FTP, NP, Вт/кг)
 - Несколько тренировок сразу, склейка частей, обрезка и разделение
-- Сохранение: FIT, GPX, PNG карты, отчёт, таблица изменений; постоянная папка
-- Светлая и тёмная тема, уведомление о новых версиях
+- Сохранение: FIT, GPX, TCX, PNG карты, отчёт «до и после» (HTML с картами — для Strava или тренера), таблица изменений; постоянная папка
+- Заезды прямо с подключённого по USB Garmin / Wahoo (кнопка «С велокомпьютера»)
+- Обновление в одну кнопку, ярлык на рабочем столе при первом запуске
+- Русский и английский интерфейс, светлая и тёмная тема
 
 ## Как пользоваться
 
@@ -42,7 +47,7 @@ Windows 10/11 (64-бит), Microsoft Edge или Google Chrome. Интернет
 
 `src/core.js` — обработка FIT/GPX, `src/ui.html` — интерфейс, `windows/main.go` — запускатель.
 ```
-python3 build.py 2.1.0            # собирает windows/VELO_FIX.html
+python3 build.py 2.2.0            # собирает windows/VELO_FIX.html
 cd windows && llvm-rc /C 65001 /FO app.res app.rc && llvm-cvtres /MACHINE:X64 /OUT:rsrc_windows_amd64.syso app.res
 go mod init velofix; CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "-H windowsgui -s -w" -o VELO_FIX.exe .
 ```

@@ -144,6 +144,7 @@ const VF = (() => {
         hr: m.v(3), cad: m.v(4), pwr: m.v(7), temp: m.v(13) };
     });
     const N = R.length, U = t => new Date((t + FIT_EPOCH) * 1000);
+    const sensorFix = opt.sensorFix === false ? { hr: [], pwr: [] } : cleanSensors(R);
     const ses = fit.msgs.find(m => !m.isDef && m.g === 18), laps = fit.msgs.filter(m => !m.isDef && m.g === 19);
     const act = fit.msgs.find(m => !m.isDef && m.g === 34);
     let tzOff = 0; if (act && act.v(5) != null && act.v(253) != null) tzOff = act.v(5) - act.v(253);
@@ -437,7 +438,7 @@ const VF = (() => {
     const deltaAt = t => { const i = lastIdxAt(t); return i < 0 || !hasDist ? 0 : R[i].dist - finalDist[i]; };
     const ptAt = []; { let acc = 0; for (let i = 0; i < N; i++) { if ((phantom[i] || trimmed[i]) && i > 0 && !pausedBetween(R[i - 1].t, R[i].t)) acc += Math.min(5, Math.max(1, R[i].t - R[i - 1].t)); ptAt.push(acc); } }
     const ctx = {
-      newDist: finalDist, newSpd, phantom, trimmed, isTrim, tStart: R[ka].t, tEnd: R[kb].t, anyPhantom: phantomBlocks.length > 0 || isTrim,
+      newDist: finalDist, newSpd, phantom, trimmed, isTrim, sensorChanged: (sensorFix.hr.length || sensorFix.pwr.length) ? { hr: sensorFix.hr.length > 0, pwr: sensorFix.pwr.length > 0 } : null, tStart: R[ka].t, tEnd: R[kb].t, anyPhantom: phantomBlocks.length > 0 || isTrim,
       deltaIn: (t0, t1) => deltaAt(t1) - deltaAt(t0),
       phantomTimeIn: (t0, t1) => { const a = lastIdxAt(t0), b = lastIdxAt(t1); return (b < 0 ? 0 : ptAt[b]) - (a < 0 ? 0 : ptAt[a]); },
       maxSpdIn: (t0, t1) => { let mx = 0; for (let i = 0; i < N; i++) if (R[i].t > t0 && R[i].t <= t1 && !trimmed[i] && newSpd[i] != null) mx = Math.max(mx, newSpd[i]); return mx; } };
@@ -450,7 +451,35 @@ const VF = (() => {
     // ---- checks
     const checks = verify(fit, fit2, R, R2, dups, recIndex, phantom, trimmed);
     return { fit, fit2, out, R, R2, N, U, tzOff, refs, gpxList, jumps, dups: [...dups], badReason, fills, runs, unfilled, newLL, newDist,
-      before, after, checks, log, warn, sensor, hasDist, totalCorr, phantomBlocks, phantomTimer, newSpd, phantom, trimmed, ka, kb, privacy, pos, valid, finalDist };
+      before, after, checks, log, warn, sensorFix, sensor, hasDist, totalCorr, phantomBlocks, phantomTimer, newSpd, phantom, trimmed, ka, kb, privacy, pos, valid, finalDist };
+  }
+
+  // ---------- heart-rate / power spikes (strap static, power-meter glitches) ----------
+  function cleanSensors(R) {
+    const N = R.length, out = { hr: [], pwr: [] };
+    const median = (key, i, w, skip) => { const v = []; for (let k = Math.max(0, i - w); k <= Math.min(N - 1, i + w); k++) if (k !== i && R[k][key] != null && !skip(R[k][key])) v.push(R[k][key]); if (v.length < 5) return null; v.sort((a, b) => a - b); return v[v.length >> 1]; };
+    const series = (key, cand, keepRun) => {
+      const c = new Array(N).fill(false), med = new Array(N).fill(null);
+      for (let i = 0; i < N; i++) { const x = R[i][key]; if (x == null) continue; med[i] = median(key, i, 30, cand.hard); c[i] = cand.hard(x) || (med[i] != null && cand.soft(x, med[i])); }
+      let i = 0;
+      while (i < N) {
+        if (!c[i]) { i++; continue; } let j = i; while (j + 1 < N && (c[j + 1] || (R[j + 1][key] == null && j + 2 < N && c[j + 2]))) j++;
+        let mx = -Infinity, hard = false; for (let k = i; k <= j; k++) if (R[k][key] != null) { mx = Math.max(mx, R[k][key]); hard = hard || cand.hard(R[k][key]); }
+        if (hard || keepRun(j - i + 1, R[j].t - R[i].t)) {
+          let a = i - 1; while (a >= 0 && (R[a][key] == null || c[a])) a--; let b = j + 1; while (b < N && (R[b][key] == null || c[b])) b++;
+          const va = a >= 0 ? R[a][key] : null, vb = b < N ? R[b][key] : null; let n = 0;
+          for (let k = i; k <= j; k++) { if (R[k][key] == null) continue; const v = va != null && vb != null ? va + (vb - va) * (R[k].t - R[a].t) / Math.max(1, R[b].t - R[a].t) : (va ?? vb);
+            R[k][key + '0'] = R[k][key]; R[k][key] = v == null ? null : Math.round(v); n++; }
+          if (n) out[key].push({ a: i, b: j, t0: R[i].t, t1: R[j].t, n, max: mx, to: R[i][key] });
+        }
+        i = j + 1;
+      }
+    };
+    // HR: > 225 is never real; a ±40 bpm jump that returns within 20 s is strap static / dropout
+    series('hr', { hard: x => x > 225 || x < 25, soft: (x, m) => Math.abs(x - m) > 40 }, (n, dt) => dt <= 20);
+    // power: > 2500 W is a glitch; a short (≤ 3 s) burst far above the surrounding level is a meter spike, a real sprint lasts longer
+    series('pwr', { hard: x => x > 2500, soft: (x, m) => x > 1200 && x > 3 * m + 800 }, (n, dt) => dt <= 3);
+    return out;
   }
 
   function summary(fit, ses) {
@@ -466,7 +495,7 @@ const VF = (() => {
     const src = fit.bytes, work = src.slice(); const dv = new DataView(work.buffer);
     const put = (fd, le, kind, val) => {
       if (!fd) return false;
-      if (kind === 'i32') dv.setInt32(fd.off, val, le); else if (kind === 'u32') dv.setUint32(fd.off, val, le); else if (kind === 'u16') dv.setUint16(fd.off, val, le);
+      if (kind === 'u8') dv.setUint8(fd.off, val); else if (kind === 'i32') dv.setInt32(fd.off, val, le); else if (kind === 'u32') dv.setUint32(fd.off, val, le); else if (kind === 'u16') dv.setUint16(fd.off, val, le);
       return true;
     };
     const toSc = d => Math.round(d / SC);
@@ -481,6 +510,8 @@ const VF = (() => {
         put(m.f[0], le, 'i32', 0x7FFFFFFF); put(m.f[1], le, 'i32', 0x7FFFFFFF);
       }
       if (newDist[i] != null && R[i].dist != null && Math.abs(newDist[i] - R[i].dist) > 0.001 && m.f[5] && m.f[5].size === 4) put(m.f[5], le, 'u32', Math.round(newDist[i] * 100));
+      if (R[i].hr0 !== undefined && m.f[3] && m.f[3].size === 1) put(m.f[3], le, 'u8', R[i].hr == null ? 0xFF : R[i].hr);
+      if (R[i].pwr0 !== undefined && m.f[7] && m.f[7].size === 2) put(m.f[7], le, 'u16', R[i].pwr == null ? 0xFFFF : R[i].pwr);
       if (ctx.phantom[i]) { if (m.f[6] && m.f[6].size === 2) put(m.f[6], le, 'u16', 0); if (m.f[73] && m.f[73].size === 4) put(m.f[73], le, 'u32', 0); }
     }
     // session / laps
@@ -496,6 +527,17 @@ const VF = (() => {
       if (tm && nd != null) for (const af of fs.avg) if (m.f[af]) { const kind = m.f[af].size === 4 ? 'u32' : 'u16'; put(m.f[af], le, kind, Math.round(nd / 100 / (tm / 1000) * 1000)); }
       if (ctx.anyPhantom) { const mx = Math.round(ctx.maxSpdIn(t0, t1) * 1000); for (const xf of fs.max) if (m.f[xf] && m.v(xf) != null) put(m.f[xf], le, m.f[xf].size === 4 ? 'u32' : 'u16', mx); }
     };
+    const sensorAgg = (m, f, t0, t1) => {
+      if (!m || !ctx.sensorChanged) return; const le = m.def.le;
+      let hs = 0, hn = 0, hm = 0, ps = 0, pn = 0, pm = 0;
+      R.forEach((r, i) => { if (ctx.trimmed[i] || r.t <= t0 || r.t > t1) return; if (r.hr != null) { hs += r.hr; hn++; hm = Math.max(hm, r.hr); } if (r.pwr != null) { ps += r.pwr; pn++; pm = Math.max(pm, r.pwr); } });
+      const p8 = (n, v) => { if (m.f[n] && m.f[n].size === 1 && m.v(n) != null) put(m.f[n], le, 'u8', Math.min(254, Math.round(v))); };
+      const p16 = (n, v) => { if (m.f[n] && m.f[n].size === 2 && m.v(n) != null) put(m.f[n], le, 'u16', Math.min(65534, Math.round(v))); };
+      if (ctx.sensorChanged.hr && hn) { p8(f.hrAvg, hs / hn); p8(f.hrMax, hm); }
+      if (ctx.sensorChanged.pwr && pn) { p16(f.pAvg, ps / pn); p16(f.pMax, pm); }
+    };
+    sensorAgg(ses, { hrAvg: 16, hrMax: 17, pAvg: 20, pMax: 21 }, -Infinity, Infinity);
+    for (const lp of laps) sensorAgg(lp, { hrAvg: 15, hrMax: 16, pAvg: 19, pMax: 20 }, (lp.v(2) ?? -Infinity) - 1, lp.v(253) ?? Infinity);
     if (ses) {
       fix(ses, { dist: 9, timer: 8, moving: [59], avg: [14, 124], max: [15, 125] }, -Infinity, Infinity);
       if (allLL.length && ses.f[29] && ses.f[32]) {
@@ -569,13 +611,14 @@ const VF = (() => {
     ok('Количество записей', R2.length === keepR.length, `${R2.length} (исходно ${R.length}; удалено дублей ${dups.size}${gone.size > dups.size ? ', обрезано ' + (gone.size - dups.size) : ''})`);
     const sensorFields = [2, 3, 4, 6, 7, 13, 73, 78, 253];
     const recs1 = fit.msgs.filter(m => !m.isDef && m.g === 20).filter((m, i) => !gone.has(i)), recs2 = fit2.msgs.filter(m => !m.isDef && m.g === 20);
-    let mism = 0, devMism = 0; const phantomKept = R.map((r, i) => i).filter(i => !gone.has(i)).map(i => phantom[i]);
+    let mism = 0, devMism = 0; const keptR = R.filter((r, i) => !gone.has(i)); const phantomKept = R.map((r, i) => i).filter(i => !gone.has(i)).map(i => phantom[i]);
     for (let i = 0; i < Math.min(recs1.length, recs2.length); i++) {
-      for (const n of sensorFields) { if ((n === 6 || n === 73) && phantomKept[i]) continue; if (recs1[i].v(n) !== recs2[i].v(n)) mism++; }
+      for (const n of sensorFields) { if ((n === 6 || n === 73) && phantomKept[i]) continue; if ((n === 3 && keptR[i].hr0 !== undefined) || (n === 7 && keptR[i].pwr0 !== undefined)) continue; if (recs1[i].v(n) !== recs2[i].v(n)) mism++; }
       const a = recs1[i], b = recs2[i], la = a.end - a.dataStart - a.def.fsize, lb = b.end - b.dataStart - b.def.fsize;
       if (la !== lb) devMism++; else for (let k = 0; k < la; k++) if (fit.bytes[a.dataStart + a.def.fsize + k] !== fit2.bytes[b.dataStart + b.def.fsize + k]) { devMism++; break; }
     }
-    ok('Показания датчиков не изменены (пульс, каденс, мощность, скорость, высота, температура, время, dev-поля)', mism === 0 && devMism === 0, `расхождений: ${mism}, в dev-полях: ${devMism}`);
+    const nS = keptR.filter(r => r.hr0 !== undefined || r.pwr0 !== undefined).length;
+    ok('Показания датчиков не изменены (пульс, каденс, мощность, скорость, высота, температура, время, dev-поля)' + (nS ? ', кроме исправленных выбросов' : ''), mism === 0 && devMism === 0, `расхождений: ${mism}, в dev-полях: ${devMism}` + (nS ? `; выбросов пульса/мощности исправлено: ${nS}` : ''));
     let mono = true; for (let i = 1; i < R2.length; i++) if (R2[i].t <= R2[i - 1].t) mono = false;
     ok('Время строго возрастает, дублей нет', mono, '');
     let neg = 0; for (let i = 1; i < R2.length; i++) if (R2[i].dist != null && R2[i - 1].dist != null && R2[i].dist < R2[i - 1].dist) neg++;
@@ -619,6 +662,29 @@ const VF = (() => {
     });
     L.push('</trkseg></trk></gpx>'); return L.join('\n');
   }
+  function toTcx(res) {
+    const { R, newLL, dups, trimmed, finalDist, newSpd, after } = res; const D = new Set(dups);
+    const keep = R.map((r, i) => !D.has(i) && !(trimmed && trimmed[i]));
+    const first = keep.indexOf(true); const t0 = R[first].t;
+    const L = ['<?xml version="1.0" encoding="UTF-8"?>',
+      '<TrainingCenterDatabase xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2" xmlns:ns3="http://www.garmin.com/xmlschemas/ActivityExtension/v2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">',
+      '<Activities><Activity Sport="Biking">', `<Id>${iso(t0)}</Id>`, `<Lap StartTime="${iso(t0)}">`,
+      `<TotalTimeSeconds>${(after.timer ?? 0).toFixed(1)}</TotalTimeSeconds>`, `<DistanceMeters>${(after.dist ?? 0).toFixed(1)}</DistanceMeters>`,
+      after.max != null ? `<MaximumSpeed>${(after.max / 3.6).toFixed(3)}</MaximumSpeed>` : '', '<Intensity>Active</Intensity><TriggerMethod>Manual</TriggerMethod><Track>'];
+    R.forEach((r, i) => {
+      if (!keep[i]) return; let s = `<Trackpoint><Time>${iso(r.t)}</Time>`;
+      if (newLL[i].lat != null) s += `<Position><LatitudeDegrees>${newLL[i].lat.toFixed(7)}</LatitudeDegrees><LongitudeDegrees>${newLL[i].lon.toFixed(7)}</LongitudeDegrees></Position>`;
+      if (r.alt != null) s += `<AltitudeMeters>${r.alt.toFixed(1)}</AltitudeMeters>`;
+      if (finalDist[i] != null) s += `<DistanceMeters>${finalDist[i].toFixed(2)}</DistanceMeters>`;
+      if (r.hr != null) s += `<HeartRateBpm><Value>${r.hr}</Value></HeartRateBpm>`;
+      if (r.cad != null) s += `<Cadence>${Math.min(254, r.cad)}</Cadence>`;
+      let x = ''; if (newSpd[i] != null) x += `<ns3:Speed>${newSpd[i].toFixed(3)}</ns3:Speed>`; if (r.pwr != null) x += `<ns3:Watts>${r.pwr}</ns3:Watts>`;
+      if (x) s += `<Extensions><ns3:TPX>${x}</ns3:TPX></Extensions>`;
+      L.push(s + '</Trackpoint>');
+    });
+    L.push('</Track></Lap>', '<Creator xsi:type="Device_t"><Name>VELO FIX</Name><UnitId>0</UnitId><ProductID>0</ProductID><Version><VersionMajor>2</VersionMajor><VersionMinor>2</VersionMinor></Version></Creator>', '</Activity></Activities></TrainingCenterDatabase>');
+    return L.filter(Boolean).join('\n');
+  }
   function toCsv(res) {
     const { R, newLL, fills, badReason, newDist, jumps, dups, tzOff } = res; const D = new Set(dups);
     const jumpAt = new Map(jumps.map(j => [j.i, j])); const firstJ = jumps.length ? jumps[0].i : Infinity;
@@ -631,6 +697,8 @@ const VF = (() => {
       if (fills[i]) { ch.push('coords'); why.push(badReason[i] ? 'недостоверный фикс: ' + badReason[i] : 'нет GPS-фикса'); }
       else if (badReason[i]) { ch.push('coords-removed'); why.push('недостоверный фикс удалён, восстановить нельзя: ' + badReason[i]); }
       if (res.phantom[i]) { ch.push('speed'); why.push(`скорость ${(r.spd * 3.6).toFixed(1)} км/ч → 0: фантомное движение (вы стояли, GPS «ехал»)`); }
+      if (r.hr0 !== undefined) { ch.push('hr'); why.push(`выброс пульса ${r.hr0} → ${r.hr ?? 'нет'}`); }
+      if (r.pwr0 !== undefined) { ch.push('power'); why.push(`выброс мощности ${r.pwr0} Вт → ${r.pwr ?? 'нет'}`); }
       if (r.dist != null && newDist[i] != null && Math.abs(r.dist - newDist[i]) > 0.001) { ch.push('distance'); const j = jumpAt.get(i); why.push(j ? `ложный скачок одометра +${j.orig.toFixed(0)} м заменён на ${j.repl} м` : 'накопленная дистанция без ложных километров'); }
       if (!ch.length) return;
       const f = fills[i];
@@ -653,10 +721,12 @@ const VF = (() => {
       `| Набор высоты | ${b.asc ?? '—'} м | ${a.asc ?? '—'} м |`,
       `| Записи без координат | ${R.filter(r => r.lat == null).length} | ${R2.filter(r => r.lat == null).length} |`,
       `| Записи | ${R.length} | ${R2.length} |`, '', '## Найденные проблемы и исправления', ''];
-    if (!jumps.length && !runs.length && !dups.length && !Object.keys(badReason).length && !res.phantomBlocks.length) L.push('Проблем не найдено.');
+    if (!jumps.length && !runs.length && !dups.length && !Object.keys(badReason).length && !res.phantomBlocks.length && !res.sensorFix.hr.length && !res.sensorFix.pwr.length) L.push('Проблем не найдено.');
     for (const j of jumps) L.push(`- **Ложный скачок одометра** ${loc(j.t0)}–${loc(j.t1)}${j.paused ? ' (во время паузы)' : ''}: +${j.orig.toFixed(0)} м, по датчику скорости ${j.repl} м. Исправлено.`);
     if (dups.length) L.push(`- **Дубликаты записей:** ${dups.length} (побайтово идентичны предыдущей записи) — удалены.`);
     for (const p of res.phantomBlocks) L.push(`- **Фантомное движение** ${loc(p.t0)}–${loc(p.t1)}: GPS показывал до ${Math.round(p.maxV)} км/ч без педалирования, высота менялась всего на ${p.altRange?.toFixed(1)} м — вы стояли, а приёмник «уехал» (дрейф или подмена GPS). Убрано ${(p.odo / 1000).toFixed(2)} км, скорость обнулена, координаты удалены.`);
+    for (const s of res.sensorFix.hr) L.push(`- **Выброс пульса** ${loc(s.t0)}${s.t1 > s.t0 ? '–' + loc(s.t1) : ''}: до ${s.max} уд/мин — помеха датчика, заменено плавным переходом (${s.n} зап.).`);
+    for (const s of res.sensorFix.pwr) L.push(`- **Выброс мощности** ${loc(s.t0)}${s.t1 > s.t0 ? '–' + loc(s.t1) : ''}: ${s.max} Вт — сбой измерителя, заменено плавным переходом (${s.n} зап.).`);
     if (res.phantomTimer) L.push(`- Время движения уменьшено на ${hms(res.phantomTimer)}: устройство считало фантомный участок ездой.`);
     const nb = Object.keys(badReason).length; if (nb) L.push(`- **Недостоверные GPS-точки:** ${nb} — удалены или заменены (причины по каждой точке — в CSV).`);
     if (runs.length) {
@@ -752,6 +822,6 @@ const VF = (() => {
     return out;
   }
 
-  return { merge, parseFit, parseGpx, run, toGpx, toCsv, toReport, zip, hav, FIT_EPOCH, SC, hms };
+  return { merge, parseFit, parseGpx, run, toGpx, toTcx, toCsv, toReport, zip, hav, FIT_EPOCH, SC, hms };
 })();
 if (typeof module !== 'undefined') module.exports = VF;
