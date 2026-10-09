@@ -33,7 +33,7 @@ import (
 //go:embed VELO_FIX.html
 var page []byte
 
-const appVersion = "2.4.2"
+const appVersion = "2.4.3"
 const port = "47815"
 const repo = "denbogos/velo-fix"
 

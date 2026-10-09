@@ -147,7 +147,7 @@ body.drag #empty .box,body.drag #mapwrap{outline:3px dashed var(--acc);outline-o
   <button class="btn ic" id="addBtn" title="Добавить файлы (FIT, GPX)">＋</button>
   <button class="btn hide-narrow" id="devBtn" title="Открыть заезды с подключённого Garmin / Wahoo" style="display:none"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M9 6h6M12 18h.01"/></svg>С велокомпьютера</button>
   <div class="sp"></div>
-  <div class="seg" id="viewSeg"><button data-v="after" class="on">Исправлено</button><button data-v="before">Исходник</button></div>
+  <div class="seg" id="viewSeg"><button data-v="after" class="on">Исправлено</button><button data-v="before">Исходник</button><button data-v="compare" title="Шторка: слева исправленный трек, справа исходный">Сравнить</button></div>
   <div class="sp"></div>
   <button class="btn hide-narrow" id="mergeBtn" disabled title="Склеить все загруженные FIT в одну тренировку">Склеить</button>
   <button class="btn hide-narrow" id="pngBtn" disabled title="Сохранить картинку карты с треком">PNG</button>
@@ -166,6 +166,7 @@ body.drag #empty .box,body.drag #mapwrap{outline:3px dashed var(--acc);outline-o
       <div class="fl" style="right:12px;top:12px"><div class="seg" id="tileSeg"><button data-t="map" class="on">Карта</button><button data-t="sat">Спутник</button><button data-t="none">Без карты</button></div></div>
       <div class="fl card zoom" style="right:12px;bottom:14px"><button id="zin" title="Приблизить">＋</button><button id="zout" title="Отдалить">－</button><button id="zfit" title="Весь трек">⤢</button></div>
       <div class="fl card" style="left:12px;bottom:14px;flex-direction:column;align-items:flex-start;gap:0"><div class="lg" id="legend"><span>—</span><i></i><span>—</span></div><div class="lg" id="legend2" style="padding-top:0;display:none"></div></div>
+      <div id="cmp" class="card" style="position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:2;display:none;align-items:center;gap:8px;padding:6px 12px;font-size:12px"><span>Исправлено</span><input type="range" id="cmpRange" min="0" max="100" value="50" style="width:260px;accent-color:var(--acc)"><span>Исходник</span></div>
       <div id="tip"></div><div id="hlLabel"></div><div class="attr" id="attr"></div>
       <div id="empty"><div class="box">
         <svg viewBox="0 0 64 64" width="56" height="56"><rect width="64" height="64" rx="14" fill="var(--acc)"/><path d="M14 48 C24 48 20 33 31 32 C42 31 39 17 50 16" fill="none" stroke="#fff" stroke-width="5.2" stroke-linecap="round"/><circle cx="14" cy="48" r="6" fill="#fff"/><circle cx="50" cy="16" r="6" fill="#fff"/></svg>
@@ -494,7 +495,8 @@ function selectFix(k) {
 }
 
 // ================= view / color / tiles =================
-function setView(v) { S.view = v; M.view = v; document.querySelectorAll('#viewSeg button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); M.draw(); }
+function setView(v) { S.view = v; M.view = v; document.querySelectorAll('#viewSeg button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); $('cmp').style.display = v === 'compare' ? 'flex' : 'none'; M.draw(); }
+$('cmpRange').oninput = () => { M.split = +$('cmpRange').value / 100; M.draw(); };
 document.querySelectorAll('#viewSeg button').forEach(b => b.onclick = () => setView(b.dataset.v));
 function setColor(c, silent) {
   const r = M.res;
@@ -554,7 +556,15 @@ const M = {
   zoomAt(dz, px, py) { const nz = Math.max(2, Math.min(18, this.z + dz)); if (nz === this.z) return;
     const lon = lonOf(this.cx + px - this.w / 2, this.z), lat = latOf(this.cy + py - this.h / 2, this.z);
     this.z = nz; this.cx = wx(lon, nz) - (px - this.w / 2); this.cy = wy(lat, nz) - (py - this.h / 2); this.draw(); },
-  draw() { if (this.raf) return; this.raf = requestAnimationFrame(() => { this.raf = 0; this.paint(this.cv.getContext('2d'), this); }); },
+  draw() { if (this.raf) return; this.raf = requestAnimationFrame(() => { this.raf = 0; const ctx = this.cv.getContext('2d'); if (this.view === 'compare') this.paintCompare(ctx); else this.paint(ctx, this); }); },
+  split: 0.5,
+  paintCompare(ctx) { // «шторка»: fixed track on the left, original on the right
+    const d = devicePixelRatio || 1, sx = this.w * this.split;
+    for (const [side, x0, x1] of [['after', 0, sx], ['before', sx, this.w]]) { ctx.setTransform(d, 0, 0, d, 0, 0); ctx.save(); ctx.beginPath(); ctx.rect(x0, 0, x1 - x0, this.h); ctx.clip(); this.view = side; this.paint(ctx, this); ctx.restore(); }
+    this.view = 'compare'; ctx.setTransform(d, 0, 0, d, 0, 0);
+    ctx.fillStyle = '#fff'; ctx.fillRect(sx - 1.5, 0, 3, this.h); ctx.fillStyle = cssv('--acc'); ctx.beginPath(); ctx.arc(sx, this.h / 2, 9, 0, 7); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = '700 11px "Segoe UI",sans-serif'; ctx.textAlign = 'center'; ctx.fillText('⇆', sx, this.h / 2 + 4); ctx.textAlign = 'left';
+  },
   tile(t, z, x, y, onload) { const k = t + '/' + z + '/' + x + '/' + y; let im = this.cache.get(k);
     if (!im) { im = new Image(); im.crossOrigin = 'anonymous'; im.ok = false; im.onload = () => { im.ok = true; onload ? onload() : this.draw(); }; im.onerror = () => { im.bad = true; this.failed++; this.draw(); };
       im.src = tileSrc(t, z, x, y); this.cache.set(k, im); if (this.cache.size > 900) this.cache.delete(this.cache.keys().next().value); }
@@ -872,14 +882,18 @@ async function mapImage(r, view, W, H) {
   M.view = keep; M.draw(); return url;
 }
 function stravaText(f) {
-  const r = f.res, b = r.before, a = r.after, T = VF_I18N.tr, en = VF_I18N.lang === 'en', parts = [];
+  const r = f.res, b = r.before, a = r.after, en = VF_I18N.lang === 'en', parts = [];
   const km = v => fmt(v / 1000, 1) + (en ? ' km' : ' км');
-  if (b.dist - a.dist > 50) parts.push((en ? 'removed ' : 'убрано ') + km(b.dist - a.dist) + (en ? ' of false distance (GPS glitches)' : ' ложного пробега (сбои GPS)'));
+  const odo = r.jumps.reduce((s, j) => s + Math.max(0, j.orig - j.repl), 0), ph = r.phantomBlocks.reduce((s, p) => s + (p.odo || 0), 0);
+  if (odo > 50) parts.push((en ? 'odometer jumps removed −' : 'убраны скачки одометра −') + km(odo));
+  if (ph > 50) parts.push((en ? 'phantom movement removed (GPS «rode» while standing) −' : 'убрано фантомное движение (GPS «ехал», пока я стоял) −') + km(ph));
   if (b.max - a.max > 3) parts.push((en ? 'max speed ' : 'макс. скорость ') + fmt(b.max, 0) + ' → ' + fmt(a.max, 1) + (en ? ' km/h' : ' км/ч'));
+  const nT = Object.values(r.badReason).filter(x => /телепорт|выброс GPS|скачок GPS/.test(x)).length;
+  if (nT > 5) parts.push(en ? `${nT} GPS jump points removed` : `удалено ${nT} точек GPS-скачков`);
   const drawn = r.runs.filter(x => /нарисовано/.test(x.method)), gpx = r.runs.filter(x => x.n > 15 && !/нарисовано|прям|интерп/.test(x.method));
   const sum = xs => xs.reduce((s, x) => s + (x.sensLen ?? x.len), 0);
-  if (gpx.length) parts.push((en ? 'restored ' : 'восстановлено ') + km(sum(gpx)) + (en ? ' without GPS from the route' : ' без GPS по маршруту'));
-  if (drawn.length) parts.push((en ? 'drawn by hand ' : 'дорисовано вручную ') + km(sum(drawn)) + (en ? ' where GPS was lost' : ' там, где пропал GPS'));
+  if (gpx.length) parts.push((en ? 'GPS gaps restored from the route: ' : 'пропуски GPS восстановлены по маршруту: ') + km(sum(gpx)));
+  if (drawn.length) parts.push((en ? 'GPS gaps drawn by hand: ' : 'пропуски GPS дорисованы вручную: ') + km(sum(drawn)));
   const sf = r.sensorFix || { hr: [], pwr: [] }; if (sf.hr.length || sf.pwr.length) parts.push(en ? 'heart-rate/power sensor spikes smoothed' : 'сглажены сбои датчика пульса/мощности');
   if (!parts.length) return en ? 'Track checked in VELO FIX — no errors found.' : 'Трек проверен в VELO FIX — ошибок нет.';
   return (en ? 'Track fixed in VELO FIX: ' : 'Трек исправлен в VELO FIX: ') + parts.join('; ') + '. ' + (en ? 'Time, cadence and other sensor data are unchanged.' : 'Время, каденс и другие данные датчиков не менялись.');
@@ -1104,7 +1118,8 @@ function edFit() {
   if (!pts.length) { const p = r.newLL[ED.A].lat != null ? r.newLL[ED.A] : r.newLL[ED.B]; if (p && p.lat != null) pts.push(p); }
   if (!pts.length) return; let s = 90, n = -90, w = 180, e = -180; for (const p of pts) { s = Math.min(s, p.lat); n = Math.max(n, p.lat); w = Math.min(w, p.lon); e = Math.max(e, p.lon); }
   if (n - s < 0.004) { s -= 0.002; n += 0.002; } if (e - w < 0.006) { w -= 0.003; e += 0.003; }
-  Object.assign(ED, M.fitBox({ s, n, w, e }, ED.w, ED.h, 120)); ED.z = Math.max(14, Math.min(ED.z, 17)); edDraw();
+  const fb = M.fitBox({ s, n, w, e }, ED.w, ED.h, 120), z = Math.max(13, Math.min(fb.z, 17));
+  ED.z = z; ED.cx = (wx(w, z) + wx(e, z)) / 2; ED.cy = (wy(s, z) + wy(n, z)) / 2; edDraw();
 }
 function edPaint() {
   const ctx = edCv.getContext('2d'), d = devicePixelRatio || 1; ctx.setTransform(d, 0, 0, d, 0, 0);
@@ -1271,6 +1286,10 @@ function edPickIdx(x, y, lo = 0, hi = Infinity, R = 16) { const r = ED.r; let be
 const editsKey = f => 'edits:' + f.name + ':' + f.bytes.length;
 $('edDone').onclick = async () => {
   const f = ED.f, r = ED.r;
+  { const last = ED.wp[ED.wp.length - 1], rest = last && ED.Bpt ? VF.hav(last.lat, last.lon, ED.Bpt.lat, ED.Bpt.lon) : 0, L = edLen() + rest;
+    if (ED.target && ED.target > 300 && Math.abs(L / ED.target - 1) > 0.3) {
+      const msg = VF_I18N.lang === 'en' ? `Drawn ${fmt(L / 1000, 1)} km, but the speed sensor says ${fmt(ED.target / 1000, 1)} km. Save anyway?` : `Нарисовано ${fmt(L / 1000, 1)} км, а по датчику скорости — ${fmt(ED.target / 1000, 1)} км. Похоже, линия не совпадает с тем, где вы ехали. Всё равно сохранить?`;
+      if (!confirm(msg)) return; } }
   // connect the last point to B (by roads, in the current mode)
   const last = ED.wp[ED.wp.length - 1];
   if (ED.Bpt && last && VF.hav(last.lat, last.lon, ED.Bpt.lat, ED.Bpt.lon) > 3) { $('edDone').disabled = true; ED.wp.push({ ...ED.Bpt, fixed: true, mode: 'line' }); await edRoute(); }
@@ -1282,7 +1301,7 @@ $('edDone').onclick = async () => {
   f.edits.push({ type: 'route', t0, t1, pts, src: 'нарисовано вручную', wp: ED.wp.map(w => ({ lat: w.lat, lon: w.lon, fixed: !!w.fixed, mode: w.mode })) });
   f.res = null; edClose(); showCurrent();
   const nx = gapItems(f.res).find(g => g.status !== 'drawn' && g.status !== 'gpx' && g.t0 > t1);
-  if (nx) { toast(VF_I18N.tr('Следующий пропуск'), 2500); openEditor(f, nx.A, nx.B, nx.edit, true); } else toast('Участок нарисован и встроен в трек');
+  if (nx) askNext(f, nx); else toast('Участок нарисован и встроен в трек');
 };
 // ================= snap to roads (OSRM map matching) =================
 // GPS in dense city blocks drifts 20–60 m into the buildings; map matching moves it back onto the road actually ridden.
@@ -1342,6 +1361,14 @@ async function snapToRoads(f, i0, i1) {
   toast(`Привязано к дорогам участков: ${edits.length}` + (fail ? ` (не получилось: ${fail})` : '') + VF_I18N.tr('. Отменить — «Убрать привязку» в блоке «Участки без GPS».'), 7000);
 }
 function unsnap(f) { f.edits = (f.edits || []).filter(e => !e.snap); f.res = null; showCurrent(); toast('Привязка к дорогам убрана'); }
+function askNext(f, nx) {
+  const r = f.res, L = t => new Date((t + VF.FIT_EPOCH + r.tzOff) * 1000).toISOString().slice(11, 16), en = VF_I18N.lang === 'en';
+  const t = $('toast'); clearTimeout(toast.t); t.style.display = 'block';
+  t.innerHTML = `${en ? 'Section added. Next gap' : 'Участок встроен. Дальше пропуск'} <b>${L(nx.t0)}</b>${nx.len != null ? ', ' + fmt(nx.len / 1000, 1) + (en ? ' km' : ' км') : ''} — <button class="btn sm" id="nxYes">${en ? 'Draw' : 'Дорисовать'}</button> <button class="btn sm" id="nxNo">${en ? 'Later' : 'Потом'}</button>`;
+  $('nxYes').onclick = () => { t.style.display = 'none'; openEditor(f, nx.A, nx.B, nx.edit, true); };
+  $('nxNo').onclick = () => { t.style.display = 'none'; };
+  toast.t = setTimeout(() => t.style.display = 'none', 15000);
+}
 function gapItems(r) {
   if (!r) return []; const f = cur(), out = [], ka = r.ka ?? 0, kb = r.kb ?? r.N - 1;
   const edit = (A, B) => (f.edits || []).find(e => e.type === 'route' && e.t0 === r.R[A].t && e.t1 === r.R[B].t);

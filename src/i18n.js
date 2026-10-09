@@ -238,6 +238,7 @@ const VF_I18N = (() => {
     ['Щёлкните по треку', 'Click the track'], [', откуда начать рисовать', 'where to start drawing'], ['Ставьте точки', 'Place points'], ['по пути, где вы ехали', 'along the way you rode'], ['· закончить —', '· to finish —'], ['щелчок по треку', 'click the track'], ['или «Готово»', 'or “Done”'],
     ['Ведите до точки B', 'Draw up to point B'], ['и нажмите «Готово»', 'and press “Done”'], ['Ставьте точки до финиша', 'Place points to the finish'],
     ['Тащите точку — сдвинуть · тащите линию — вставить точку · правый клик — удалить · Ctrl+Z — отменить · A и B можно перетаскивать', 'Drag a point to move · drag the line to insert · right-click to delete · Ctrl+Z to undo · A and B can be dragged'],
+    ['Сравнить', 'Compare'], ['Шторка: слева исправленный трек, справа исходный', 'Slider: fixed track on the left, original on the right'],
     // ---- core: checks, reasons, methods
     ['Структура FIT: контрольные суммы и разбор до конца файла', 'FIT structure: checksums and parsing to the end of file'],
     ['Количество записей', 'Record count'],
