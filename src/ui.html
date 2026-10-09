@@ -238,9 +238,9 @@ body.drag #empty .box,body.drag #mapwrap{outline:3px dashed var(--acc);outline-o
     <div class="edcnt num" id="edCnt"></div>
     <div class="sp"></div>
     <div class="seg" id="edMode"><button data-m="free" title="По дорогам и тротуарам, в обе стороны односторонних улиц">По дорогам · без ПДД</button><button data-m="rules" title="Как велосипед по правилам">По ПДД</button><button data-m="line" title="Прямыми отрезками — поля, дворы, тропинки">Прямо</button></div>
-    <label class="btn" title="Точка прилипает к ближайшей дороге на карте" style="gap:6px"><input type="checkbox" id="edMagnet" style="accent-color:var(--acc)"> Магнит</label>
+    <input type="checkbox" id="edMagnet" checked hidden>
     <button class="btn" id="edUndo" title="Отменить (Ctrl+Z)">↶ Отменить</button>
-    <button class="btn" id="edClear" title="Начать заново">Сбросить</button>
+    <button class="btn" id="edClear" title="Начать заново" hidden>Сбросить</button>
     <button class="btn" id="edCancel">Отмена</button>
     <button class="btn p" id="edDone">Готово</button>
   </div>
@@ -974,17 +974,21 @@ const CELL_LAT = 0.015, CELL_LON = 0.025;
 const HW = 'primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|unclassified|residential|living_street|service|pedestrian|footway|cycleway|path|track|road|steps|bridleway|trunk|trunk_link';
 const ROADS = { cells: new Map(), loading: new Map(), nodes: new Map(), status: '' };
 const cellKey = (i, j) => `roads1:${i}:${j}`;
-async function fetchCell(i, j) {
+const CELL_SLOTS = { busy: 0, q: [] };
+const cellSlot = () => new Promise(res => { if (CELL_SLOTS.busy < 3) { CELL_SLOTS.busy++; res(); } else CELL_SLOTS.q.push(res); });
+const cellFree = () => { const n = CELL_SLOTS.q.shift(); if (n) n(); else CELL_SLOTS.busy--; };
+async function fetchCell(i, j) { await cellSlot(); try { return await fetchCell0(i, j); } finally { cellFree(); } }
+async function fetchCell0(i, j) {
   const s = i * CELL_LAT, w = j * CELL_LON, q = `[out:json][timeout:60];way["highway"~"^(${HW})$"](${s.toFixed(4)},${w.toFixed(4)},${(s + CELL_LAT).toFixed(4)},${(w + CELL_LON).toFixed(4)});out body geom qt;`;
-  for (let round = 0; round < 2; round++) for (const ep of OVERPASS) {
-    try {
-      let r = await withTimeout(45000, sg => fetch(ep, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: sg })).catch(() => null);
-      if ((!r || !r.ok) && IS_APP) r = await withTimeout(50000, sg => api('/api/overpass?ep=' + encodeURIComponent(ep), { method: 'POST', body: q, signal: sg })).catch(() => null);
-      if (!r || !r.ok) continue;
-      const j2 = await r.json(); if (!j2.elements) continue;
-      return j2.elements.filter(e => e.type === 'way' && e.geometry && e.nodes).map(e => ({ n: e.nodes, g: e.geometry.map(p => [Math.round(p.lat * 1e6) / 1e6, Math.round(p.lon * 1e6) / 1e6]), h: e.tags.highway, o: e.tags.oneway === 'yes' || e.tags.oneway === '1' ? 1 : e.tags.oneway === '-1' ? -1 : (e.tags.junction === 'roundabout' ? 1 : 0), b: e.tags['oneway:bicycle'] === 'no' ? 2 : 0 }));
-    } catch (e) {}
-  }
+  // ask all mirrors at once and take the first good answer (the Russian mirror is often slow, the others may be blocked)
+  const one = async ep => {
+    let r = await withTimeout(40000, sg => fetch(ep, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: sg })).catch(() => null);
+    if ((!r || !r.ok) && IS_APP) r = await withTimeout(45000, sg => api('/api/overpass?ep=' + encodeURIComponent(ep), { method: 'POST', body: q, signal: sg })).catch(() => null);
+    if (!r || !r.ok) throw 0; const j2 = await r.json(); if (!j2.elements) throw 0;
+    return j2.elements.filter(e => e.type === 'way' && e.geometry && e.nodes).map(e => ({ n: e.nodes, g: e.geometry.map(p => [Math.round(p.lat * 1e6) / 1e6, Math.round(p.lon * 1e6) / 1e6]), h: e.tags.highway, o: e.tags.oneway === 'yes' || e.tags.oneway === '1' ? 1 : e.tags.oneway === '-1' ? -1 : (e.tags.junction === 'roundabout' ? 1 : 0), b: e.tags['oneway:bicycle'] === 'no' ? 2 : 0 }));
+  };
+  for (let round = 0; round < 2; round++) { try { return await Promise.any(OVERPASS.map(one)); } catch (e) {} }
+  return null;
   return null;
 }
 function addWays(ways) {
@@ -1066,7 +1070,12 @@ async function routeLeg(a, b, mode) {
   if (mode === 'line') return [a, b];
   const k = [mode, a.lat.toFixed(6), a.lon.toFixed(6), b.lat.toFixed(6), b.lon.toFixed(6)].join(',');
   if (routeCache.has(k)) return routeCache.get(k);
-  try { const loc = await localRoute(a, b, mode); if (loc && loc.length >= 2) { routeCache.set(k, loc); return loc; } } catch (e) { console.warn(e); }
+  if (mode !== 'line') {
+    const job = localRoute(a, b, mode).catch(() => null);
+    const loc = await Promise.race([job, new Promise(r => setTimeout(() => r('slow'), 2500))]);
+    if (loc === 'slow') { job.then(p => { if (p && p.length >= 2) { routeCache.set(k, p); if ($('ed').classList.contains('open')) { ED.legKey = []; edRoute(); } } }); return [a, b]; }
+    if (loc && loc.length >= 2) { routeCache.set(k, loc); return loc; }
+  }
   const ll = `${a.lon.toFixed(6)},${a.lat.toFixed(6)};${b.lon.toFixed(6)},${b.lat.toFixed(6)}`;
   let pts = null;
   try { // OSRM (FOSSGIS): foot profile ignores one-way streets — «без ПДД»; bike profile follows them
@@ -1089,12 +1098,13 @@ function edDraw() { if (ED.raf) return; ED.raf = requestAnimationFrame(() => { E
 function edResize() { const b = edCv.getBoundingClientRect(), d = devicePixelRatio || 1; ED.w = b.width; ED.h = b.height; edCv.width = Math.round(b.width * d); edCv.height = Math.round(b.height * d); edDraw(); }
 function edFit() {
   const r = ED.r, pts = [...ED.wp]; if (ED.Bpt) pts.push(ED.Bpt);
-  const pad = Math.max(30, Math.round((ED.B - ED.A) * 0.15));
-  for (let i = Math.max(0, ED.A - pad); i <= Math.min(r.N - 1, ED.B + pad); i++) { const p = r.R[i]; if (p.lat != null && !r.badReason[i]) pts.push(p); }
   for (const g of ED.legs) if (g) pts.push(...g);
+  // only the section itself: its ends and what is drawn (never the whole ride)
+  for (const i of [ED.A, ED.B]) { const p = r.R[i]; if (p && p.lat != null && !r.badReason[i]) pts.push(p); }
+  if (!pts.length) { const p = r.newLL[ED.A].lat != null ? r.newLL[ED.A] : r.newLL[ED.B]; if (p && p.lat != null) pts.push(p); }
   if (!pts.length) return; let s = 90, n = -90, w = 180, e = -180; for (const p of pts) { s = Math.min(s, p.lat); n = Math.max(n, p.lat); w = Math.min(w, p.lon); e = Math.max(e, p.lon); }
   if (n - s < 0.004) { s -= 0.002; n += 0.002; } if (e - w < 0.006) { w -= 0.003; e += 0.003; }
-  Object.assign(ED, M.fitBox({ s, n, w, e }, ED.w, ED.h, 70)); ED.z = Math.min(ED.z, 17); edDraw();
+  Object.assign(ED, M.fitBox({ s, n, w, e }, ED.w, ED.h, 120)); ED.z = Math.max(14, Math.min(ED.z, 17)); edDraw();
 }
 function edPaint() {
   const ctx = edCv.getContext('2d'), d = devicePixelRatio || 1; ctx.setTransform(d, 0, 0, d, 0, 0);
@@ -1104,7 +1114,7 @@ function edPaint() {
     for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) { if (y < 0 || y >= n) continue; const im = M.tile(ED.tiles, tz, ((x % n) + n) % n, y, edDraw); if (im.ok) ctx.drawImage(im, x * TILE - ED.cx + ED.w / 2, y * TILE - ED.cy + ED.h / 2, TILE, TILE); } }
   if (isDark() && ED.tiles === 'map') { ctx.fillStyle = 'rgba(14,16,19,.42)'; ctx.fillRect(0, 0, ED.w, ED.h); }
   const r = ED.r; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  const line = (col, w) => { ctx.beginPath(); let st = false; for (let i = 0; i < r.N; i++) { if (r.trimmed && r.trimmed[i]) continue; const p = r.R[i]; if (p.lat == null || r.badReason[i] || (!ED.pick && i > ED.A && i < ED.B)) { st = false; continue; } const q = edScr(p.lat, p.lon); st ? ctx.lineTo(...q) : ctx.moveTo(...q); st = true; } ctx.strokeStyle = col; ctx.lineWidth = w; ctx.stroke(); };
+  const line = (col, w) => { ctx.beginPath(); let st = false; for (let i = 0; i < r.N; i++) { if (r.trimmed && r.trimmed[i]) continue; const p = r.R[i]; if (p.lat == null || r.badReason[i] || (!ED.pick && !ED.join && i > ED.A && i < ED.B)) { st = false; continue; } const q = edScr(p.lat, p.lon); st ? ctx.lineTo(...q) : ctx.moveTo(...q); st = true; } ctx.strokeStyle = col; ctx.lineWidth = w; ctx.stroke(); };
   line('rgba(255,255,255,.95)', 9); line('#2563eb', 5);
   // drawn route
   ctx.strokeStyle = isDark() ? 'rgba(0,0,0,.6)' : 'rgba(255,255,255,.95)'; ctx.lineWidth = 8; ctx.beginPath();
@@ -1134,15 +1144,16 @@ function edInfo() {
   document.querySelectorAll('#edMode button').forEach(b => b.classList.toggle('on', b.dataset.m === ED.mode));
   document.querySelectorAll('#edTiles button').forEach(b => b.classList.toggle('on', b.dataset.t === ED.tiles));
   if (ED.pick) { $('edTitle').textContent = 'Нарисовать участок вручную'; $('edSub').textContent = ''; $('edCnt').style.display = 'none';
-    $('edHint').innerHTML = ED.pick === 'A' ? '<b>Щёлкните по синему треку</b> — с этой точки начнёте рисовать (дальше трек будет заменён вашей линией). Или в любом месте карты — тогда от старта записи.' : '<b>Шаг 2.</b> Щёлкните <b>в любом месте карты</b> — это первая точка вашей линии, рисуйте дальше до дома. Или щёлкните по синему треку — там, где GPS вернулся. <button class="btn sm" id="edToEnd">до конца записи</button>'; $('edDone').disabled = true;
-    if ($('edToEnd')) $('edToEnd').onclick = () => edStart(ED.pickA, ED.r.kb ?? ED.r.N - 1); return; }
+    $('edHint').innerHTML = '<b>Щёлкните по треку</b>, откуда начать рисовать'; $('edDone').disabled = true; return; }
+
   $('edTitle').textContent = 'Дорисовать участок'; $('edSub').textContent = `${tLoc(r.R[ED.A].t)}–${tLoc(r.R[ED.B].t)} · ${hms(r.R[ED.B].t - r.R[ED.A].t)}`;
   const last = ED.wp[ED.wp.length - 1], rest = last && ED.Bpt ? VF.hav(last.lat, last.lon, ED.Bpt.lat, ED.Bpt.lon) : 0;
   const L = edLen(), T = ED.target, c = $('edCnt'); c.style.display = '';
   const tot = L + rest;
   c.className = 'edcnt num ' + (T && ED.wp.length > 1 ? (Math.abs(tot / T - 1) <= 0.08 ? 'ok' : 'far') : '');
   c.innerHTML = `Нарисовано <b>${fmt(L / 1000, 2)}</b> км` + (T ? ` из <b>${fmt(T / 1000, 2)}</b> км по датчику` : '') + (ED.Bpt && rest > 30 ? ` · до B ${rest >= 1000 ? fmt(rest / 1000, 1) + ' км' : Math.round(rest) + ' м'}` : '');
-  $('edHint').innerHTML = '<b>Щёлкайте по карте</b> — линия тянется за точками по дорогам. Точки можно ставить сколько угодно часто. <b>Тащите</b> точку — сдвинуть, <b>тащите линию</b> — вставить точку, <b>правый клик</b> по точке — удалить. Колёсико — масштаб. Ctrl+Z — отменить. <b>A и B можно тащить</b> — куда угодно; у синего трека они цепляются за него.' + (ED.join ? ' <b>Чтобы закончить — щёлкните по синему треку</b> там, где он снова правильный; если рисуете до финиша — просто «Готово».' : '') + (ED.Bpt ? ' Ведите линию до точки B — при «Готово» последняя точка соединится с B коротким прямым отрезком.' : ' <b>Точки B нет — финишем станет последняя поставленная точка</b> (например, ваш дом).');
+  $('edHint').innerHTML = !ED.wp.length || (ED.wp.length === 1 && ED.wp[0].fixed) ? '<b>Ставьте точки</b> по пути, где вы ехали' : ED.join ? '<b>Ставьте точки</b> · закончить — <b>щелчок по треку</b> или «Готово»' : ED.Bpt ? '<b>Ведите до точки B</b> и нажмите «Готово»' : '<b>Ставьте точки до финиша</b> и нажмите «Готово»';
+  $('edHint').title = 'Тащите точку — сдвинуть · тащите линию — вставить точку · правый клик — удалить · Ctrl+Z — отменить · A и B можно перетаскивать';
   $('edDone').disabled = ED.legs.some(g => !g) || (ED.wp.length < 2 && !(ED.Bpt && ED.wp.length === 1 && ED.wp[0].fixed));
 }
 let edSeq = 0;
@@ -1191,9 +1202,10 @@ function edStart(A, B, existing, freeStart, extend) {
   // the section has a recorded track → put it into the editor as editable points (drag / delete / insert like in gpx.studio)
   if (false) { const rec = []; for (let i = A + 1; i < B; i++) if (r.R[i].lat != null && !r.badReason[i]) rec.push({ lat: r.R[i].lat, lon: r.R[i].lon, idx: i });
     if (rec.length >= 3) { const keep = simplifyPts(rec, 6); for (const p of keep) ED.wp.push({ lat: p.lat, lon: p.lon, fixed: false, mode: 'line', idx: p.idx }); if (ED.wp[0] && ED.wp[0].mode == null && ED.wp.length > 1 && !ED.wp[0].fixed) delete ED.wp[0].mode; } }
-  edFit(); edRoute();
+  if (ED.join && ED.wp[0]) { const p = ED.wp[0]; ED.z = Math.max(ED.z, 15); ED.cx = wx(p.lon, ED.z); ED.cy = wy(p.lat, ED.z); edDraw(); } else edFit();
+  edRoute();
   { const pts = [...ED.wp]; if (ED.Bpt) pts.push(ED.Bpt); if (!pts.length) pts.push(r.R[A]); const la = pts.map(p => p.lat), lo = pts.map(p => p.lon);
-    ensureCells(Math.min(...la) - 0.01, Math.min(...lo) - 0.016, Math.max(...la) + 0.01, Math.max(...lo) + 0.016, roadsProgress).then(ok => { if (!ok) toast('Карта дорог не загрузилась — проверьте интернет. Можно рисовать прямыми.', 6000); }); }
+    for (const p of pts) ensureCells(p.lat - 0.003, p.lon - 0.005, p.lat + 0.003, p.lon + 0.005, roadsProgress).then(ok => { if (!ok && !edRoute.mapWarn) { edRoute.mapWarn = true; toast('Карта дорог не загрузилась — проверьте интернет. Можно рисовать прямыми.', 6000); } }); }
 }
 function edClose() { $('ed').classList.remove('open'); }
 $('edCancel').onclick = () => { if (ED.wp && ED.wp.length > 2 && !confirm(VF_I18N.tr('Закрыть без сохранения нарисованного?'))) return; edClose(); };
@@ -1201,7 +1213,7 @@ $('edUndo').onclick = () => { if (!ED.undo.length) return; ED.wp = JSON.parse(ED
 $('edClear').onclick = () => { if (ED.pick || !ED.wp.length) return; edSnap(); ED.wp = ED.wp.filter(w => w.fixed); edRoute(); };
 document.querySelectorAll('#edMode button').forEach(b => b.onclick = () => { ED.mode = b.dataset.m; store.set('edMode', ED.mode); edInfo(); });
 document.querySelectorAll('#edTiles button').forEach(b => b.onclick = () => { ED.tiles = b.dataset.t; store.set('edTiles', ED.tiles); edInfo(); edDraw(); });
-$('edMagnet').checked = store.get('edMagnet', true); $('edMagnet').onchange = () => store.set('edMagnet', $('edMagnet').checked);
+store.set('edMagnet', true); $('edMagnet').checked = true; $('edMagnet').onchange = () => store.set('edMagnet', $('edMagnet').checked);
 $('edZin').onclick = () => edZoom(1, ED.w / 2, ED.h / 2); $('edZout').onclick = () => edZoom(-1, ED.w / 2, ED.h / 2); $('edZfit').onclick = () => edFit();
 function edZoom(dz, px, py) { const nz = Math.max(3, Math.min(19, ED.z + dz)); if (nz === ED.z) return; const p = edLL(px, py); ED.z = nz; ED.cx = wx(p.lon, nz) - (px - ED.w / 2); ED.cy = wy(p.lat, nz) - (py - ED.h / 2); edDraw(); }
 function edHitWp(x, y, R = 7) { let best = null, bd = R * R; ED.wp.forEach((w, i) => { if (w.fixed) return; const q = edScr(w.lat, w.lon), d = (q[0] - x) ** 2 + (q[1] - y) ** 2; if (d <= bd) { bd = d; best = i; } }); return best; }
@@ -1333,9 +1345,11 @@ function unsnap(f) { f.edits = (f.edits || []).filter(e => !e.snap); f.res = nul
 function gapItems(r) {
   if (!r) return []; const f = cur(), out = [], ka = r.ka ?? 0, kb = r.kb ?? r.N - 1;
   const edit = (A, B) => (f.edits || []).find(e => e.type === 'route' && e.t0 === r.R[A].t && e.t1 === r.R[B].t);
-  for (const g of r.runs) { if (g.n <= 15 || /интерп/.test(g.method) || g.srcs.includes('привязано к дорогам')) continue; const A = g.a - 1, B = g.b + 1, e = edit(A, B);
+  const tiny = (len, dt) => (len == null || len < 300) && dt < 90;
+  for (const g of r.runs) { if (g.n <= 15 || tiny(g.sensLen ?? g.len, g.t1 - g.t0) || /интерп/.test(g.method) || g.srcs.includes('привязано к дорогам')) continue; const A = g.a - 1, B = g.b + 1, e = edit(A, B);
     out.push({ A, B, t0: g.t0, t1: g.t1, len: g.sensLen ?? g.len, status: e || /нарисовано/.test(g.method) ? 'drawn' : /прям/.test(g.method) ? 'line' : /интерп/.test(g.method) ? 'gpx' : 'gpx', edit: e }); }
   for (const u of r.unfilled) { if (u.n <= 15) continue; const A = Math.max(ka, u.a - 1), B = Math.min(kb, u.b + 1);
+    if (tiny(r.hasDist ? r.finalDist[B] - r.finalDist[A] : null, r.R[B].t - r.R[A].t)) continue;
     out.push({ A, B, t0: u.t0, t1: r.R[B].t, len: r.hasDist ? r.finalDist[B] - r.finalDist[A] : null, status: 'empty', edge: !!u.edge }); }
   return out.sort((a, b) => a.t0 - b.t0);
 }
