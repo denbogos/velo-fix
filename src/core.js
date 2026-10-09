@@ -386,7 +386,7 @@ const VF = (() => {
         P = new Poly(rt.pts, rt.src); P.src = rt.pts.map(() => rt.src); ok = true; best = { len: P.L, dA: 0, dB: 0 };
         const ratio = sensLen ? P.L / sensLen : null;
         conf = ratio == null ? 'низкая' : (ratio > 0.85 && ratio < 1.2 ? 'средняя' : 'низкая');
-        method = 'маршрут по дорогам' + (sensLen ? ' + дистанция датчика скорости' : ' + равномерно по времени') + (ratio != null && conf === 'низкая' ? ` (длина маршрута ${Math.round(ratio * 100)}% от пройденного — проверьте)` : '');
+        method = (rt.src === 'нарисовано вручную' ? 'нарисовано вручную' : 'маршрут по дорогам') + (sensLen ? ' + дистанция датчика скорости' : ' + равномерно по времени') + (ratio != null && conf === 'низкая' ? ` (длина маршрута ${Math.round(ratio * 100)}% от пройденного — проверьте)` : '');
       }
       if (!ok && refs.length) {
         const ch = chainsFor(A, B); nodes = ch.nodes;

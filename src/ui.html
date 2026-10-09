@@ -116,6 +116,21 @@ body.drag #empty .box,body.drag #mapwrap{outline:3px dashed var(--acc);outline-o
 .field{display:grid;grid-template-columns:1fr 110px;gap:10px;align-items:center;margin:8px 0}
 .field input{padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel2)}
 #toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:9px;font-weight:500;display:none;z-index:40;box-shadow:var(--shadow);max-width:80%}
+#ed{position:fixed;inset:0;z-index:50;background:var(--bg);display:none;grid-template-rows:56px minmax(0,1fr)}
+#ed.open{display:grid}
+.edtop{display:flex;align-items:center;gap:8px;padding:0 14px;background:var(--panel);border-bottom:1px solid var(--line)}
+.edt{display:flex;flex-direction:column;line-height:1.25}.edt b{font-size:14px}.edt span{font-size:11.5px}
+.edcnt{margin-left:14px;font-size:13px;padding:5px 11px;border-radius:7px;background:var(--panel2);border:1px solid var(--line)}
+.edcnt b{font-size:15px}.edcnt.ok{border-color:var(--ok);color:var(--ok)}.edcnt.far{border-color:var(--warn);color:var(--warn)}
+.edmap{position:relative;overflow:hidden;background:var(--map);touch-action:none;user-select:none}
+#edCv{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair}
+.edhint{position:absolute;left:12px;bottom:14px;padding:8px 12px;font-size:12px;color:var(--mute);max-width:520px;z-index:2}
+.edhint b{color:var(--ink)}
+.edbusy{position:absolute;left:50%;top:14px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:5px 12px;border-radius:7px;font-size:12px;display:none;z-index:3}
+.gaplist{display:grid;gap:4px;margin-top:2px}
+.gapit{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;font-weight:500}
+.gapit .st{font-size:11px;font-weight:600;padding:1px 7px;border-radius:99px;background:var(--panel);border:1px solid var(--line);margin-left:6px}
+.gapit .st.e{color:var(--warn);border-color:var(--warn)}.gapit .st.m{color:var(--acc);border-color:var(--acc)}
 :root[lang=en] [data-lang=ru]{display:none!important}:root:not([lang=en]) [data-lang=en]{display:none!important}
 .devlist{display:grid;gap:4px;margin:8px 0 14px;max-height:52vh;overflow:auto}
 .devrow{display:grid;grid-template-columns:20px 1fr auto auto;gap:10px;align-items:center;padding:6px 8px;border-radius:7px;border:1px solid var(--line);cursor:pointer}
@@ -217,6 +232,25 @@ body.drag #empty .box,body.drag #mapwrap{outline:3px dashed var(--acc);outline-o
   <div class="devlist" id="devList"></div>
   <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn" id="devRefresh">Обновить</button><button class="btn" id="devClose">Закрыть</button><button class="btn p" id="devOpen" disabled>Открыть выбранные</button></div>
 </div></div>
+<div id="ed" class="notr-skip">
+  <div class="edtop">
+    <div class="edt"><b id="edTitle">Дорисовать участок</b><span class="mute num" id="edSub"></span></div>
+    <div class="edcnt num" id="edCnt"></div>
+    <div class="sp"></div>
+    <div class="seg" id="edMode"><button data-m="free" title="По дорогам и тротуарам, в обе стороны односторонних улиц">По дорогам · без ПДД</button><button data-m="rules" title="Как велосипед по правилам">По ПДД</button><button data-m="line" title="Прямыми отрезками — поля, дворы, тропинки">Прямо</button></div>
+    <label class="btn" title="Точка прилипает к ближайшей дороге на карте" style="gap:6px"><input type="checkbox" id="edMagnet" style="accent-color:var(--acc)"> Магнит</label>
+    <button class="btn" id="edUndo" title="Отменить (Ctrl+Z)">↶ Отменить</button>
+    <button class="btn" id="edClear" title="Начать заново">Сбросить</button>
+    <button class="btn" id="edCancel">Отмена</button>
+    <button class="btn p" id="edDone">Готово</button>
+  </div>
+  <div class="edmap"><canvas id="edCv"></canvas>
+    <div class="fl" style="right:12px;top:12px"><div class="seg" id="edTiles"><button data-t="map">Карта</button><button data-t="sat">Спутник</button></div></div>
+    <div class="fl card zoom" style="right:12px;bottom:14px"><button id="edZin">＋</button><button id="edZout">－</button><button id="edZfit" title="Весь участок">⤢</button></div>
+    <div class="edhint card" id="edHint"></div>
+    <div class="edbusy" id="edBusy">прокладываю…</div><div class="edbusy" id="edRoads" style="top:48px"></div>
+  </div>
+</div>
 <div id="toast"></div>
 <script>
 /*CORE*/
@@ -255,6 +289,7 @@ async function addFiles(list) {
     if (/\.gpx$/i.test(f.name)) { const g = VF.parseGpx(await f.text(), f.name); S.gpx = S.gpx.filter(x => x.name !== g.name); S.gpx.push(g); gpxAdded = true; continue; }
     if (!/\.fit$/i.test(f.name)) continue;
     const entry = { id: ++uid, name: f.name, bytes: new Uint8Array(await f.arrayBuffer()), res: null, err: null };
+    entry.edits = [];
     S.files = S.files.filter(x => x.name !== entry.name); S.files.push(entry); if (!firstNew) firstNew = entry;
   }
   if (gpxAdded) for (const f of S.files) f.res = null;
@@ -266,7 +301,7 @@ async function addFiles(list) {
 const cur = () => S.files.find(f => f.id === S.cur);
 function process(f) {
   if (f.res || f.err) return;
-  try { f.res = VF.run(f.bytes, S.gpx, { fillStraight: S.straight, trim: f.trim || null, sensorFix: S.sensorFix }); f.stats = stats(f.res); }
+  try { f.res = VF.run(f.bytes, S.gpx, { fillStraight: S.straight, trim: f.trim || null, sensorFix: S.sensorFix, edits: f.edits || [] }); f.stats = stats(f.res); }
   catch (e) { console.error(e); f.err = e.message || String(e); }
 }
 function fileStatus(f) { if (f.err) return ['var(--bad)', 'ошибка']; if (!f.res) return ['var(--line)', '']; const n = fixList(f.res).length; return n ? ['var(--warn)', `исправлено ${n}`] : ['var(--ok)', 'в порядке']; }
@@ -364,11 +399,13 @@ function fixList(r) {
   for (const p of r.phantomBlocks) out.push({ sev: 'bad', a: p.a, b: p.b, title: 'Фантомное движение', sub: `${L(p.t0)}–${L(p.t1)} · ${Math.round(p.maxV)} км/ч без педалирования`, val: '−' + fmt(p.odo / 1000, 1) + ' км', label: `Фантом ${Math.round(p.maxV)} км/ч · −${fmt(p.odo / 1000, 1)} км` });
   for (const j of r.jumps) out.push({ sev: 'warn', a: Math.max(0, j.i - 30), b: Math.min(r.N - 1, j.i + 30), title: 'Скачок одометра', sub: `${L(j.t1)}${j.paused ? ' · во время паузы' : ''}`, val: '−' + (j.orig - j.repl >= 1000 ? fmt((j.orig - j.repl) / 1000, 1) + ' км' : Math.round(j.orig - j.repl) + ' м'), label: `Скачок одометра +${Math.round(j.orig)} м` });
   // group removed GPS points (non-phantom) into runs
-  const idx = Object.keys(r.badReason).map(Number).filter(i => !r.badReason[i].startsWith('фантом')).sort((a, b) => a - b);
+  const idx = Object.keys(r.badReason).map(Number).filter(i => !r.badReason[i].startsWith('фантом') && !r.badReason[i].startsWith('заменено')).sort((a, b) => a - b);
   const groups = []; for (const i of idx) { const g = groups[groups.length - 1]; if (g && i - g.b <= 60) g.b = i, g.n++; else groups.push({ a: i, b: i, n: 1 }); }
   if (groups.length) { const n = idx.length, A = groups[0].a, B = groups[groups.length - 1].b;
     out.push({ sev: 'warn', a: A, b: B, groups, title: 'GPS-телепортации', sub: `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'точка' : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? 'точки' : 'точек'} на ${groups.length} участк${groups.length === 1 ? 'е' : 'ах'}`, val: String(n), label: 'Удалённые точки GPS' }); }
-  for (const g of r.runs.filter(x => x.n > 15)) out.push({ sev: 'info', a: g.a, b: g.b, title: 'Пропуск GPS восстановлен', sub: `${L(g.t0)}–${L(g.t1)} · ${g.srcs.join(' → ')} · ${g.conf}`, val: fmt(g.sensLen != null ? g.sensLen / 1000 : g.len / 1000, 1) + ' км', label: 'Восстановлено по ' + g.srcs.join(' → ') });
+  const snapped = r.runs.filter(x => x.srcs.includes('привязано к дорогам'));
+  if (snapped.length) out.push({ sev: 'info', a: snapped[0].a, b: snapped[snapped.length - 1].b, groups: snapped.map(x => ({ a: x.a, b: x.b })), title: 'Привязано к дорогам', sub: `${snapped.length} участк${snapped.length === 1 ? 'а' : 'ов'} · GPS сдвинут с домов на дорогу`, val: fmt(snapped.reduce((a, x) => a + (x.sensLen ?? x.len), 0) / 1000, 1) + ' км', label: 'Привязано к дорогам' });
+  for (const g of r.runs.filter(x => x.n > 15 && !x.srcs.includes('привязано к дорогам'))) out.push({ sev: 'info', a: g.a, b: g.b, title: /нарисовано/.test(g.method) ? 'Нарисовано вручную' : 'Пропуск GPS восстановлен', sub: `${L(g.t0)}–${L(g.t1)} · ${g.srcs.join(' → ')} · ${g.conf}`, val: fmt(g.sensLen != null ? g.sensLen / 1000 : g.len / 1000, 1) + ' км', label: 'Восстановлено по ' + g.srcs.join(' → ') });
   if (r.phantomTimer) out.push({ sev: 'acc', a: r.phantomBlocks[0].a, b: r.phantomBlocks[r.phantomBlocks.length - 1].b, title: 'Время движения', sub: 'фантом считался ездой', val: '−' + hms(r.phantomTimer), label: 'Время движения пересчитано' });
   const sf = r.sensorFix || { hr: [], pwr: [] };
   if (sf.hr.length) { const n = sf.hr.reduce((a, x) => a + x.n, 0), mx = Math.max(...sf.hr.map(x => x.max)); out.push({ sev: 'warn', a: Math.max(0, sf.hr[0].a - 20), b: Math.min(r.N - 1, sf.hr[sf.hr.length - 1].b + 20), groups: sf.hr.map(x => ({ a: Math.max(0, x.a - 10), b: Math.min(r.N - 1, x.b + 10) })), title: 'Выбросы пульса', sub: `${sf.hr.length > 1 ? sf.hr.length + ' × · ' : L(sf.hr[0].t0) + ' · '}до ${mx} уд/мин · помехи датчика`, val: String(n), label: `Выбросы пульса до ${mx}` }); }
@@ -408,13 +445,14 @@ function renderSide() {
   const unf = r.unfilled.filter(u => u.n > 5);
   const miss = r.R2.filter(x => x.lat == null).length;
   const nStr = r.runs.filter(x => /прям/.test(x.method)).length, hasGap = miss > 0 || nStr > 0;
-  $('gaps').innerHTML = hasGap ? `<div class="gapbox"><div class="gaprow"><span>Участки без GPS:</span><div class="seg sm"><button data-s="1" class="${S.straight ? 'on' : ''}">прямой линией</button><button data-s="0" class="${S.straight ? '' : 'on'}">оставить пустыми</button></div></div>
+  $('gaps').innerHTML = hasGap ? `<div class="gapbox"><div class="gaprow"><span>Ненарисованные участки:</span><div class="seg sm"><button data-s="1" class="${S.straight ? 'on' : ''}">прямой линией</button><button data-s="0" class="${S.straight ? '' : 'on'}">оставить пустыми</button></div></div>
     <div class="mute">${S.straight ? 'Пропуски соединены прямой — на карте точечный пунктир.' : `Без координат ${miss} записей — Strava соединит их прямой сама.`} Точнее — добавьте GPX маршрута («＋»).</div></div>` : '';
   $('gaps').querySelectorAll('[data-s]').forEach(b => b.onclick = () => setStraight(b.dataset.s === '1'));
   const tail = r.phantomBlocks.find(p => p.a > r.N * 0.8);
   if (tail && !f.trim) $('gaps').innerHTML += `<div class="gapbox"><b>Похоже, в конце записи вы ехали на транспорте</b><div class="mute">с ${new Date((r.R[tail.a].t + VF.FIT_EPOCH + r.tzOff) * 1000).toISOString().slice(11, 16)} — скорость до ${Math.round(tail.maxV)} км/ч без педалирования.</div><button class="btn sm" id="trimTail">Обрезать тренировку здесь</button></div>`;
   if ($('trimTail')) $('trimTail').onclick = () => applyTrim(f, r.R[0].t, r.R[tail.a - 1].t);
   if (f.trim) $('gaps').innerHTML += `<div class="gapbox"><b>Тренировка обрезана</b><div class="mute">${hms(f.trim.t1 - f.trim.t0)} записи из ${hms(r.R[r.N - 1].t - r.R[0].t)}</div><button class="btn sm" id="untrim">Вернуть целиком</button></div>`;
+  renderGapList(r);
   if ($('untrim')) $('untrim').onclick = () => { f.trim = null; f.res = null; showCurrent(true); };
   // power
   $('pwSec').style.display = st.hasP ? '' : 'none'; $('pwLeg').style.display = st.hasP ? '' : 'none';
@@ -554,7 +592,7 @@ const M = {
       else if (this.view === 'after' && r.fills[s.i] && r.fills[s.pi]) {
         const src = r.fills[s.i].src;
         if (src.startsWith('прям') || src === 'интерполяция') { ctx.setLineDash([2, 7]); ctx.strokeStyle = isDark() ? '#cbd5e1' : '#475569'; ctx.lineWidth = 3.4; }
-        else { const m = metric(s.i, S.color); ctx.setLineDash([10, 7]); ctx.strokeStyle = m == null ? '#8a8f99' : grad((m - lo) / (hi - lo)); ctx.lineWidth = 4.2; }
+        else { const m = metric(s.i, S.color); ctx.setLineDash(src === 'привязано к дорогам' ? [] : [10, 7]); ctx.strokeStyle = m == null ? '#8a8f99' : grad((m - lo) / (hi - lo)); ctx.lineWidth = 4.2; }
       }
       else { const m = metric(s.i, S.color); ctx.setLineDash([]); ctx.strokeStyle = m == null ? '#8a8f99' : grad((m - lo) / (hi - lo)); ctx.lineWidth = 4.2; }
       ctx.beginPath(); ctx.moveTo(...s.a); ctx.lineTo(...s.b); ctx.stroke();
@@ -663,8 +701,8 @@ function doSplit(i) {
   splitMode = false; $('splitBtn').classList.remove('p');
   const f = cur(), r = f.res; if (i == null || i < 10 || i > r.N - 10) { toast('Выберите точку ближе к середине'); return; }
   const t = r.R[i].t, base = f.name.replace(/\.fit$/i, ''), t0 = f.trim ? f.trim.t0 : r.R[0].t, t1 = f.trim ? f.trim.t1 : r.R[r.N - 1].t;
-  const a = { id: ++uid, name: base + '_часть1.fit', bytes: f.bytes, trim: { t0, t1: r.R[i - 1].t }, res: null, err: null };
-  const b = { id: ++uid, name: base + '_часть2.fit', bytes: f.bytes, trim: { t0: t, t1 }, res: null, err: null };
+  const a = { id: ++uid, name: base + '_часть1.fit', bytes: f.bytes, trim: { t0, t1: r.R[i - 1].t }, res: null, err: null, edits: f.edits };
+  const b = { id: ++uid, name: base + '_часть2.fit', bytes: f.bytes, trim: { t0: t, t1 }, res: null, err: null, edits: f.edits };
   const k = S.files.indexOf(f); S.files.splice(k, 1, a, b); S.cur = a.id; showCurrent(true);
   toast('Тренировка разделена на 2 части — переключайтесь кнопкой с названием слева вверху');
 }
@@ -672,9 +710,10 @@ function renderSegStat() {
   const el = $('segStat'), r = M.res;
   if (!S.sel || !r) { el.className = 'num mute'; el.innerHTML = r ? 'Выделите участок мышью — статистика отрезка' : ''; M.draw(); drawProfile(); return; }
   const s = segStats(r, S.sel[0], S.sel[1]);
-  el.className = 'num'; el.innerHTML = `<span class="mute">${fmt(s.from / 1000, 1)}–${fmt(s.to / 1000, 1)} км</span><b>${fmt(s.dist / 1000, 2)} км</b><b>${hms(s.mv)}</b><b>${fmt(s.avg, 1)} км/ч</b>${s.hr ? `<b style="color:var(--hr)">♥ ${Math.round(s.hr)}</b>` : ''}${s.p != null && cur().stats.hasP ? `<b style="color:var(--pw)">${Math.round(s.p)} Вт</b>` : ''}<b>+${Math.round(s.up)} м</b><button class="btn sm" id="segKeep" title="Оставить в тренировке только этот отрезок">Оставить только его</button><button class="lnk" id="segX" title="Сбросить">✕</button>`;
+  el.className = 'num'; el.innerHTML = `<span class="mute">${fmt(s.from / 1000, 1)}–${fmt(s.to / 1000, 1)} км</span><b>${fmt(s.dist / 1000, 2)} км</b><b>${hms(s.mv)}</b><b>${fmt(s.avg, 1)} км/ч</b>${s.hr ? `<b style="color:var(--hr)">♥ ${Math.round(s.hr)}</b>` : ''}${s.p != null && cur().stats.hasP ? `<b style="color:var(--pw)">${Math.round(s.p)} Вт</b>` : ''}<b>+${Math.round(s.up)} м</b><button class="btn sm" id="segDraw" title="Перерисовать этот участок вручную">✎ Перерисовать</button><button class="btn sm" id="segKeep" title="Оставить в тренировке только этот отрезок">Оставить только его</button><button class="lnk" id="segX" title="Сбросить">✕</button>`;
   $('segKeep').onclick = () => { const r2 = cur().res; applyTrim(cur(), r2.R[S.sel[0]].t, r2.R[S.sel[1]].t); };
   $('segX').onclick = () => { S.sel = null; renderSegStat(); };
+  $('segDraw').onclick = () => { const f = cur(), r2 = f.res; let [a, b] = S.sel; const e = (f.edits || []).find(x => x.type === 'route' && x.t0 === r2.R[a].t && x.t1 === r2.R[b].t); openEditor(f, a, b, e); };
   M.draw(); drawProfile();
 }
 
@@ -705,13 +744,14 @@ const outputs = f => { const enc = new TextEncoder(), b = baseName(f), r = f.res
 $('saveBtn').onclick = () => { const f = cur(); if (f && f.res) saveFile(...outputs(f).fit); };
 $('saveMenuBtn').onclick = () => {
   const m = $('saveMenu'); const fits = S.files.length;
-  m.innerHTML = `<div class="cap">Эта тренировка</div><button data-k="fit">FIT для Strava / Garmin</button><button data-k="gpx">GPX — трек для других сервисов</button><button data-k="tcx">TCX — для TrainingPeaks, Polar и др.</button><button data-k="png">PNG — картинка карты</button><button data-k="html">Отчёт «до и после» (.html)</button><button data-k="md">Отчёт об исправлениях (.md)</button><button data-k="csv">Таблица изменений (.csv)</button><button data-k="zip">Всё архивом (.zip)</button>
+  m.innerHTML = `<div class="cap">Эта тренировка</div><button data-k="fit">FIT для Strava / Garmin</button><button data-k="gpx">GPX — трек для других сервисов</button><button data-k="tcx">TCX — для TrainingPeaks, Polar и др.</button><button data-k="png">PNG — картинка карты</button><button data-k="html">Отчёт «до и после» (.html)</button><button data-k="strava">Описание для Strava (скопировать)</button><button data-k="md">Отчёт об исправлениях (.md)</button><button data-k="csv">Таблица изменений (.csv)</button><button data-k="zip">Всё архивом (.zip)</button>
     <div class="sepl"></div><div class="cap">Все тренировки</div><button data-k="all" ${fits < 2 ? 'disabled' : ''}>Сохранить все исправленные FIT (${fits})</button>
     <div class="sepl"></div><div class="cap">Куда сохранять</div>${canPick ? `<button data-k="dir">${dirHandle ? 'Папка: ' + esc(dirHandle.name) + ' — изменить' : 'Выбрать постоянную папку…'}</button>${dirHandle ? '<button data-k="ask">Спрашивать каждый раз</button>' : ''}` : '<button disabled>В «Загрузки» (выбор папки недоступен)</button>'}`;
   openMenu(m, $('saveMenuBtn'), true);
   m.querySelectorAll('button[data-k]').forEach(b => b.onclick = async () => { closeMenus(); const k = b.dataset.k, f = cur();
     if (k === 'png') return exportPng();
     if (k === 'html') return exportReport();
+    if (k === 'strava') return copyStrava(f);
     if (k === 'dir') return pickDir(); if (k === 'ask') return forgetDir();
     if (k === 'all') return saveAll();
     const o = outputs(f);
@@ -760,6 +800,7 @@ async function exportPng() {
 }
 
 setTiles(S.tiles); applyTheme();
+try { for (let i = localStorage.length - 1; i >= 0; i--) { const k = localStorage.key(i); if (k && k.startsWith('velofix.edits:')) localStorage.removeItem(k); } } catch (e) {}
 const IS_APP = location.origin === 'http://127.0.0.1:47815';
 const api = (path, opt = {}) => fetch(path, { ...opt, headers: { 'X-VeloFix': '1', ...(opt.headers || {}) } });
 // ================= language =================
@@ -830,6 +871,20 @@ async function mapImage(r, view, W, H) {
   try { url = cv.toDataURL('image/png'); } catch (e) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cv.width, cv.height); M.paint(ctx, v, { scale: 2, clean: true, noTiles: true }); url = cv.toDataURL('image/png'); }
   M.view = keep; M.draw(); return url;
 }
+function stravaText(f) {
+  const r = f.res, b = r.before, a = r.after, T = VF_I18N.tr, en = VF_I18N.lang === 'en', parts = [];
+  const km = v => fmt(v / 1000, 1) + (en ? ' km' : ' км');
+  if (b.dist - a.dist > 50) parts.push((en ? 'removed ' : 'убрано ') + km(b.dist - a.dist) + (en ? ' of false distance (GPS glitches)' : ' ложного пробега (сбои GPS)'));
+  if (b.max - a.max > 3) parts.push((en ? 'max speed ' : 'макс. скорость ') + fmt(b.max, 0) + ' → ' + fmt(a.max, 1) + (en ? ' km/h' : ' км/ч'));
+  const drawn = r.runs.filter(x => /нарисовано/.test(x.method)), gpx = r.runs.filter(x => x.n > 15 && !/нарисовано|прям|интерп/.test(x.method));
+  const sum = xs => xs.reduce((s, x) => s + (x.sensLen ?? x.len), 0);
+  if (gpx.length) parts.push((en ? 'restored ' : 'восстановлено ') + km(sum(gpx)) + (en ? ' without GPS from the route' : ' без GPS по маршруту'));
+  if (drawn.length) parts.push((en ? 'drawn by hand ' : 'дорисовано вручную ') + km(sum(drawn)) + (en ? ' where GPS was lost' : ' там, где пропал GPS'));
+  const sf = r.sensorFix || { hr: [], pwr: [] }; if (sf.hr.length || sf.pwr.length) parts.push(en ? 'heart-rate/power sensor spikes smoothed' : 'сглажены сбои датчика пульса/мощности');
+  if (!parts.length) return en ? 'Track checked in VELO FIX — no errors found.' : 'Трек проверен в VELO FIX — ошибок нет.';
+  return (en ? 'Track fixed in VELO FIX: ' : 'Трек исправлен в VELO FIX: ') + parts.join('; ') + '. ' + (en ? 'Time, cadence and other sensor data are unchanged.' : 'Время, каденс и другие данные датчиков не менялись.');
+}
+async function copyStrava(f) { const t = stravaText(f); try { await navigator.clipboard.writeText(t); toast((VF_I18N.lang === 'en' ? 'Copied for the Strava description: ' : 'Скопировано для описания в Strava: ') + t, 9000); } catch (e) { prompt('Strava', t); } }
 async function exportReport() {
   const f = cur(), r = f && f.res; if (!r) return;
   const T = VF_I18N.tr, en = VF_I18N.lang === 'en';
@@ -879,7 +934,428 @@ const APP_VERSION = '/*VERSION*/', REPO = 'denbogos/velo-fix';
     if (info && info.v && newer(info.v, APP_VERSION)) { const u = $('upd'); u.href = info.url; u.textContent = IS_APP ? `Обновить до ${info.v}` : `Доступна версия ${info.v} ↗`; u.title = info.notes || 'Скачать новую версию'; u.classList.add('on'); u.dataset.v = info.v; }
   } catch (e) { /* offline — silently ignore */ }
 })();
-window.__velofix = { S, M, addFiles };
+// ================= route editor («Дорисовать участок») =================
+const ROUTE_HOSTS = { osrm: 'https://routing.openstreetmap.de', brouter: 'https://brouter.de' };
+const routeCache = new Map();
+// routing servers can be unreachable (blocked / very slow from some networks): never wait more than a few seconds
+const ROUTE_STATE = { downUntil: 0 };
+const withTimeout = (ms, fn) => { const c = new AbortController(); const t = setTimeout(() => c.abort(), ms); return fn(c.signal).finally(() => clearTimeout(t)); };
+async function fetchJson(u) {
+  if (Date.now() < ROUTE_STATE.downUntil) throw new Error('down');
+  try { const r = await withTimeout(6000, sg => fetch(u, { signal: sg })); if (r.ok) return await r.json(); } catch (e) {}
+  if (IS_APP) { try { const r = await withTimeout(8000, sg => api('/api/route?u=' + encodeURIComponent(u), { signal: sg })); if (r.ok) return await r.json(); } catch (e) {} }
+  ROUTE_STATE.downUntil = Date.now() + 5 * 60e3;   // don't retry for 5 minutes
+  throw new Error('нет связи с сервисом маршрутов');
+}
+// «магнит»: without a routing server, a click snaps to the nearest road drawn on the OSM map tiles
+const ROADPX = (r, g, b) => (r > 246 && g > 246 && b > 246) || (r > 240 && g > 240 && b > 180 && b < 215) || (r > 245 && g > 200 && g < 225 && b > 150 && b < 175) || (r > 240 && g > 160 && g < 190 && b > 140 && b < 170) || (r > 215 && r < 240 && g > 135 && g < 160 && b > 150 && b < 175) || (r > 215 && r < 230 && g > 215 && g < 230 && b > 225 && b < 240);
+function magnet(x, y) {
+  if (!store.get('edMagnet', true)) return null;
+  if (ROADS.nodes.size) { const p = edLL(x, y), m = 18 * 40075016 * Math.cos(p.lat * Math.PI / 180) / (256 * 2 ** ED.z), ne = nearestEdge(p.lat, p.lon, m); if (ne) return edScr(ne.lat, ne.lon); }
+  if (ED.tiles !== 'map' || ED.z < 14) return null;
+  const R = 14, W = 2 * R + 1, cv = document.createElement('canvas'); cv.width = W; cv.height = W; const ctx = cv.getContext('2d', { willReadFrequently: true });
+  const tz = Math.min(ED.z, 19), n = 2 ** tz, gx = ED.cx - ED.w / 2 + x, gy = ED.cy - ED.h / 2 + y;
+  for (let tx = Math.floor((gx - R) / TILE); tx <= Math.floor((gx + R) / TILE); tx++) for (let ty = Math.floor((gy - R) / TILE); ty <= Math.floor((gy + R) / TILE); ty++) {
+    const im = M.tile('map', tz, ((tx % n) + n) % n, ty); if (!im.ok) return null; ctx.drawImage(im, tx * TILE - (gx - R), ty * TILE - (gy - R)); }
+  let d; try { d = ctx.getImageData(0, 0, W, W).data; } catch (e) { return null; }
+  const road = (i, j) => { const k = (j * W + i) * 4; return ROADPX(d[k], d[k + 1], d[k + 2]); };
+  let best = null, bd = Infinity;
+  for (let j = 0; j < W; j++) for (let i = 0; i < W; i++) if (road(i, j)) { const dd = (i - R) ** 2 + (j - R) ** 2; if (dd < bd) { bd = dd; best = [i, j]; } }
+  if (!best) return null;
+  // centre of the road around that pixel
+  let sx = 0, sy = 0, c = 0; for (let j = Math.max(0, best[1] - 4); j <= Math.min(W - 1, best[1] + 4); j++) for (let i = Math.max(0, best[0] - 4); i <= Math.min(W - 1, best[0] + 4); i++) if (road(i, j)) { sx += i; sy += j; c++; }
+  return [x + sx / c - R, y + sy / c - R];
+}
+// ================= local road map (works without VPN) =================
+// Road geometry of the area is downloaded once from OpenStreetMap (Overpass; a Russian mirror first), kept in IndexedDB,
+// and routing / snapping / map matching are computed right here — no routing server needed.
+const OVERPASS = ['https://maps.mail.ru/osm/tools/overpass/api/interpreter', 'https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+const CELL_LAT = 0.015, CELL_LON = 0.025;
+const HW = 'primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|unclassified|residential|living_street|service|pedestrian|footway|cycleway|path|track|road|steps|bridleway|trunk|trunk_link';
+const ROADS = { cells: new Map(), loading: new Map(), nodes: new Map(), status: '' };
+const cellKey = (i, j) => `roads1:${i}:${j}`;
+async function fetchCell(i, j) {
+  const s = i * CELL_LAT, w = j * CELL_LON, q = `[out:json][timeout:60];way["highway"~"^(${HW})$"](${s.toFixed(4)},${w.toFixed(4)},${(s + CELL_LAT).toFixed(4)},${(w + CELL_LON).toFixed(4)});out body geom qt;`;
+  for (let round = 0; round < 2; round++) for (const ep of OVERPASS) {
+    try {
+      let r = await withTimeout(45000, sg => fetch(ep, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: sg })).catch(() => null);
+      if ((!r || !r.ok) && IS_APP) r = await withTimeout(50000, sg => api('/api/overpass?ep=' + encodeURIComponent(ep), { method: 'POST', body: q, signal: sg })).catch(() => null);
+      if (!r || !r.ok) continue;
+      const j2 = await r.json(); if (!j2.elements) continue;
+      return j2.elements.filter(e => e.type === 'way' && e.geometry && e.nodes).map(e => ({ n: e.nodes, g: e.geometry.map(p => [Math.round(p.lat * 1e6) / 1e6, Math.round(p.lon * 1e6) / 1e6]), h: e.tags.highway, o: e.tags.oneway === 'yes' || e.tags.oneway === '1' ? 1 : e.tags.oneway === '-1' ? -1 : (e.tags.junction === 'roundabout' ? 1 : 0), b: e.tags['oneway:bicycle'] === 'no' ? 2 : 0 }));
+    } catch (e) {}
+  }
+  return null;
+}
+function addWays(ways) {
+  for (const w of ways) for (let k = 0; k < w.n.length; k++) {
+    const id = w.n[k]; let nd = ROADS.nodes.get(id); if (!nd) { nd = { id, lat: w.g[k][0], lon: w.g[k][1], adj: [] }; ROADS.nodes.set(id, nd); }
+    if (k) { const p = ROADS.nodes.get(w.n[k - 1]), L = VF.hav(p.lat, p.lon, nd.lat, nd.lon);
+      if (!p.adj.some(e => e.to === id)) p.adj.push({ to: id, L, h: w.h, dir: w.o === -1 ? -1 : 0, ow: w.o, fw: true });
+      if (!nd.adj.some(e => e.to === p.id)) nd.adj.push({ to: p.id, L, h: w.h, ow: w.o, fw: false, bk: w.b }); }
+  }
+}
+async function ensureCells(s, w, n, e, onProg) {
+  const keys = []; for (let i = Math.floor(s / CELL_LAT); i <= Math.floor(n / CELL_LAT); i++) for (let j = Math.floor(w / CELL_LON); j <= Math.floor(e / CELL_LON); j++) keys.push([i, j]);
+  if (keys.length > 40) return false;
+  let done = 0, ok = true;
+  await Promise.all(keys.map(async ([i, j]) => {
+    const k = cellKey(i, j);
+    if (!ROADS.cells.has(k)) {
+      if (!ROADS.loading.has(k)) ROADS.loading.set(k, (async () => {
+        let ways = null; try { ways = await idb('readonly', st => st.get(k)); } catch (x) {}
+        if (!ways) { ways = await fetchCell(i, j); if (ways) try { await idb('readwrite', st => st.put(ways, k)); } catch (x) {} }
+        if (ways) { addWays(ways); ROADS.cells.set(k, true); }
+        ROADS.loading.delete(k); return !!ways; })());
+      if (!(await ROADS.loading.get(k) ?? ROADS.cells.has(k))) ok = false;
+    }
+    done++; onProg && onProg(done, keys.length);
+  }));
+  return ok;
+}
+// passable edge for the mode: «free» — any direction, sidewalks ok; «rules» — one-way streets only forward (cycleways/footways both ways)
+function edgeOk(e, mode) {
+  if (mode !== 'rules' || !e.ow || e.bk === 2) return true;
+  if (/^(footway|cycleway|path|pedestrian|track|steps|bridleway)$/.test(e.h)) return true;
+  return e.ow === 1 ? e.fw : !e.fw;
+}
+const edgeCost = (e, mode) => e.L * (e.h === 'steps' ? 4 : /^(trunk|trunk_link)$/.test(e.h) ? 1.6 : mode === 'rules' && /^(footway|pedestrian)$/.test(e.h) ? 1.5 : 1);
+function nearestEdge(lat, lon, maxD = 120) {
+  // brute force over nodes near the point (grid would be faster; areas are small)
+  const k = Math.cos(lat * Math.PI / 180), X = p => [(p.lon - lon) * 111320 * k, (p.lat - lat) * 110540];
+  let best = null;
+  for (const a of ROADS.nodes.values()) {
+    if (Math.abs(a.lat - lat) > 0.004 || Math.abs(a.lon - lon) > 0.006) continue;
+    const [ax, ay] = X(a);
+    for (const e of a.adj) { if (e.to < a.id) continue; const b = ROADS.nodes.get(e.to), [bx, by] = X(b), dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy;
+      const u = L2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / L2)) : 0, d = Math.hypot(ax + u * dx, ay + u * dy);
+      if (d <= maxD && (!best || d < best.d)) best = { d, a, b, u, lat: a.lat + u * (b.lat - a.lat), lon: a.lon + u * (b.lon - a.lon) }; }
+  }
+  return best;
+}
+function astar(p, q, mode) {
+  const sa = nearestEdge(p.lat, p.lon), sb = nearestEdge(q.lat, q.lon); if (!sa || !sb) return null;
+  if ((sa.a === sb.a && sa.b === sb.b)) return [p, { lat: sa.lat, lon: sa.lon }, { lat: sb.lat, lon: sb.lon }, q];
+  const START = -1, GOAL = -2, h = nd => VF.hav(nd.lat, nd.lon, sb.lat, sb.lon);
+  const g = new Map([[START, 0]]), prev = new Map(), open = [[h(sa), START]], done = new Set();
+  const startEdges = [[sa.a, sa.d + VF.hav(sa.lat, sa.lon, sa.a.lat, sa.a.lon)], [sa.b, VF.hav(sa.lat, sa.lon, sa.b.lat, sa.b.lon)]];
+  const goalOf = id => id === sb.a.id ? VF.hav(sb.lat, sb.lon, sb.a.lat, sb.a.lon) : id === sb.b.id ? VF.hav(sb.lat, sb.lon, sb.b.lat, sb.b.lon) : null;
+  const push = (f, id) => { open.push([f, id]); let i = open.length - 1; while (i > 0) { const pi = (i - 1) >> 1; if (open[pi][0] <= open[i][0]) break; [open[pi], open[i]] = [open[i], open[pi]]; i = pi; } };
+  const pop = () => { const top = open[0], last = open.pop(); if (open.length) { open[0] = last; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < open.length && open[l][0] < open[m][0]) m = l; if (r < open.length && open[r][0] < open[m][0]) m = r; if (m === i) break; [open[m], open[i]] = [open[i], open[m]]; i = m; } } return top; };
+  const limit = VF.hav(p.lat, p.lon, q.lat, q.lon) * 4 + 3000; let iter = 0;
+  while (open.length && iter++ < 200000) {
+    const [, id] = pop(); if (done.has(id)) continue; done.add(id);
+    if (id === GOAL) break;
+    const gc = g.get(id); if (gc > limit) break;
+    const relax = (to, c) => { if (c < (g.get(to) ?? Infinity)) { g.set(to, c); prev.set(to, id); push(c + (to === GOAL ? 0 : h(ROADS.nodes.get(to))), to); } };
+    if (id === START) { for (const [nd, c] of startEdges) relax(nd.id, c); continue; }
+    const nd = ROADS.nodes.get(id), gl = goalOf(id); if (gl != null) relax(GOAL, gc + gl);
+    for (const e of nd.adj) if (edgeOk(e, mode)) relax(e.to, gc + edgeCost(e, mode));
+  }
+  if (!prev.has(GOAL)) return null;
+  const path = []; let c = prev.get(GOAL); while (c !== START && c != null) { const nd = ROADS.nodes.get(c); path.push({ lat: nd.lat, lon: nd.lon }); c = prev.get(c); }
+  path.reverse(); return [p, { lat: sa.lat, lon: sa.lon }, ...path, { lat: sb.lat, lon: sb.lon }, q];
+}
+async function localRoute(a, b, mode) {
+  const s = Math.min(a.lat, b.lat) - 0.006, n = Math.max(a.lat, b.lat) + 0.006, w = Math.min(a.lon, b.lon) - 0.01, e = Math.max(a.lon, b.lon) + 0.01;
+  if (!(await ensureCells(s, w, n, e, roadsProgress))) return null;
+  return astar(a, b, mode === 'rules' ? 'rules' : 'free');
+}
+function roadsProgress(d, t) { ROADS.status = d < t ? `дороги ${d}/${t}` : ''; const el = $('edRoads'); if (el) { el.textContent = d < t ? VF_I18N.tr('Загружаю карту дорог…') + ` ${d}/${t}` : ''; el.style.display = d < t ? 'block' : 'none'; } }
+async function routeLeg(a, b, mode) {
+  if (mode === 'line') return [a, b];
+  const k = [mode, a.lat.toFixed(6), a.lon.toFixed(6), b.lat.toFixed(6), b.lon.toFixed(6)].join(',');
+  if (routeCache.has(k)) return routeCache.get(k);
+  try { const loc = await localRoute(a, b, mode); if (loc && loc.length >= 2) { routeCache.set(k, loc); return loc; } } catch (e) { console.warn(e); }
+  const ll = `${a.lon.toFixed(6)},${a.lat.toFixed(6)};${b.lon.toFixed(6)},${b.lat.toFixed(6)}`;
+  let pts = null;
+  try { // OSRM (FOSSGIS): foot profile ignores one-way streets — «без ПДД»; bike profile follows them
+    const j = await fetchJson(`${ROUTE_HOSTS.osrm}/routed-${mode === 'free' ? 'foot' : 'bike'}/route/v1/${mode === 'free' ? 'foot' : 'bike'}/${ll}?overview=full&geometries=geojson`);
+    if (j.routes && j.routes[0]) pts = j.routes[0].geometry.coordinates.map(([lon, lat]) => ({ lat, lon }));
+  } catch (e) {}
+  if (!pts) try { // fallback: BRouter
+    const j = await fetchJson(`${ROUTE_HOSTS.brouter}/brouter?lonlats=${a.lon.toFixed(6)},${a.lat.toFixed(6)}|${b.lon.toFixed(6)},${b.lat.toFixed(6)}&profile=${mode === 'free' ? 'shortest' : 'trekking'}&alternativeidx=0&format=geojson`);
+    pts = j.features[0].geometry.coordinates.map(c => ({ lat: c[1], lon: c[0] }));
+  } catch (e) {}
+  if (!pts || pts.length < 2) return null;
+  pts = [a, ...pts, b];   // exact click points at both ends
+  routeCache.set(k, pts); return pts;
+}
+const ED = { open: false, z: 14, cx: 0, cy: 0, w: 0, h: 0, raf: 0, mode: store.get('edMode', 'free'), tiles: store.get('edTiles', 'map') === 'sat' ? 'sat' : 'map' };
+const edCv = $('edCv');
+const edScr = (lat, lon) => [wx(lon, ED.z) - ED.cx + ED.w / 2, wy(lat, ED.z) - ED.cy + ED.h / 2];
+const edLL = (x, y) => ({ lat: latOf(ED.cy + y - ED.h / 2, ED.z), lon: lonOf(ED.cx + x - ED.w / 2, ED.z) });
+function edDraw() { if (ED.raf) return; ED.raf = requestAnimationFrame(() => { ED.raf = 0; edPaint(); }); }
+function edResize() { const b = edCv.getBoundingClientRect(), d = devicePixelRatio || 1; ED.w = b.width; ED.h = b.height; edCv.width = Math.round(b.width * d); edCv.height = Math.round(b.height * d); edDraw(); }
+function edFit() {
+  const r = ED.r, pts = [...ED.wp]; if (ED.Bpt) pts.push(ED.Bpt);
+  const pad = Math.max(30, Math.round((ED.B - ED.A) * 0.15));
+  for (let i = Math.max(0, ED.A - pad); i <= Math.min(r.N - 1, ED.B + pad); i++) { const p = r.R[i]; if (p.lat != null && !r.badReason[i]) pts.push(p); }
+  for (const g of ED.legs) if (g) pts.push(...g);
+  if (!pts.length) return; let s = 90, n = -90, w = 180, e = -180; for (const p of pts) { s = Math.min(s, p.lat); n = Math.max(n, p.lat); w = Math.min(w, p.lon); e = Math.max(e, p.lon); }
+  if (n - s < 0.004) { s -= 0.002; n += 0.002; } if (e - w < 0.006) { w -= 0.003; e += 0.003; }
+  Object.assign(ED, M.fitBox({ s, n, w, e }, ED.w, ED.h, 70)); ED.z = Math.min(ED.z, 17); edDraw();
+}
+function edPaint() {
+  const ctx = edCv.getContext('2d'), d = devicePixelRatio || 1; ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.fillStyle = cssv('--map'); ctx.fillRect(0, 0, ED.w, ED.h);
+  const tz = Math.min(ED.z, 19), n = 2 ** tz;
+  { const x0 = Math.floor((ED.cx - ED.w / 2) / TILE), x1 = Math.floor((ED.cx + ED.w / 2) / TILE), y0 = Math.floor((ED.cy - ED.h / 2) / TILE), y1 = Math.floor((ED.cy + ED.h / 2) / TILE);
+    for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) { if (y < 0 || y >= n) continue; const im = M.tile(ED.tiles, tz, ((x % n) + n) % n, y, edDraw); if (im.ok) ctx.drawImage(im, x * TILE - ED.cx + ED.w / 2, y * TILE - ED.cy + ED.h / 2, TILE, TILE); } }
+  if (isDark() && ED.tiles === 'map') { ctx.fillStyle = 'rgba(14,16,19,.42)'; ctx.fillRect(0, 0, ED.w, ED.h); }
+  const r = ED.r; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const line = (col, w) => { ctx.beginPath(); let st = false; for (let i = 0; i < r.N; i++) { if (r.trimmed && r.trimmed[i]) continue; const p = r.R[i]; if (p.lat == null || r.badReason[i] || (!ED.pick && i > ED.A && i < ED.B)) { st = false; continue; } const q = edScr(p.lat, p.lon); st ? ctx.lineTo(...q) : ctx.moveTo(...q); st = true; } ctx.strokeStyle = col; ctx.lineWidth = w; ctx.stroke(); };
+  line('rgba(255,255,255,.95)', 9); line('#2563eb', 5);
+  // drawn route
+  ctx.strokeStyle = isDark() ? 'rgba(0,0,0,.6)' : 'rgba(255,255,255,.95)'; ctx.lineWidth = 8; ctx.beginPath();
+  ED.legs.forEach(g => { if (!g) return; g.forEach((p, k) => { const q = edScr(p.lat, p.lon); k ? ctx.lineTo(...q) : ctx.moveTo(...q); }); }); ctx.stroke();
+  ED.legs.forEach((g, i) => { const a = ED.wp[i], b = ED.wp[i + 1]; if (!a || !b) return; ctx.beginPath();
+    if (!g) { ctx.setLineDash([3, 6]); ctx.strokeStyle = cssv('--acc'); ctx.lineWidth = 3; ctx.moveTo(...edScr(a.lat, a.lon)); ctx.lineTo(...edScr(b.lat, b.lon)); }
+    else { ctx.setLineDash(b.mode === 'line' ? [9, 6] : []); ctx.strokeStyle = cssv('--acc'); ctx.lineWidth = 4.5; g.forEach((p, k) => { const q = edScr(p.lat, p.lon); k ? ctx.lineTo(...q) : ctx.moveTo(...q); }); }
+    ctx.stroke(); ctx.setLineDash([]); });
+  // preview: last point → B (connected automatically on «Готово») and → cursor
+  const last = ED.wp[ED.wp.length - 1];
+  if (last && ED.Bpt && !ED.pick) { ctx.beginPath(); ctx.setLineDash([2, 7]); ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 2.5; ctx.moveTo(...edScr(last.lat, last.lon)); ctx.lineTo(...edScr(ED.Bpt.lat, ED.Bpt.lon)); ctx.stroke(); ctx.setLineDash([]); }
+  if (last && ED.mouse && !ED.dragging && !ED.pick && ED.hot == null) { ctx.beginPath(); ctx.setLineDash([4, 5]); ctx.strokeStyle = cssv('--acc'); ctx.globalAlpha = .6; ctx.lineWidth = 2; ctx.moveTo(...edScr(last.lat, last.lon)); ctx.lineTo(...ED.mouse); ctx.stroke(); ctx.globalAlpha = 1; ctx.setLineDash([]); }
+  // points: small, like gpx.studio
+  const dot = (p, rad, fill, stroke, lw, label) => { const q = edScr(p.lat, p.lon); ctx.beginPath(); ctx.arc(q[0], q[1], rad, 0, 7); ctx.fillStyle = fill; ctx.fill(); ctx.lineWidth = lw; ctx.strokeStyle = stroke; ctx.stroke();
+    if (label) { ctx.fillStyle = '#fff'; ctx.font = '700 9px "Segoe UI",sans-serif'; ctx.textAlign = 'center'; ctx.fillText(label, q[0], q[1] + 3); ctx.textAlign = 'left'; } };
+  ED.wp.forEach((w, i) => { if (w.fixed) return; dot(w, i === ED.hot ? 5.5 : 4, '#fff', cssv('--acc'), 2); });
+  if (ED.wp[0] && ED.wp[0].fixed) dot(ED.wp[0], 8, '#16a34a', '#fff', 2.5, 'A');
+  if (ED.Bpt) dot(ED.Bpt, 8, '#dc2626', '#fff', 2.5, 'B');
+  if (ED.ins) { const q = ED.ins; ctx.beginPath(); ctx.arc(q[0], q[1], 4, 0, 7); ctx.fillStyle = cssv('--acc'); ctx.fill(); }
+  if (ED.pick && ED.pickHover != null) dot(r.R[ED.pickHover], 8, ED.pick === 'A' ? '#16a34a' : '#dc2626', '#fff', 3);
+  if (ED.pick && ED.pickA != null) dot(ED.pickAfree || r.R[ED.pickA], 8, '#16a34a', '#fff', 3, 'A');
+}
+const tLoc = t => new Date((t + VF.FIT_EPOCH + ED.r.tzOff) * 1000).toISOString().slice(11, 16);
+function edLen() { let L = 0; for (const g of ED.legs) if (g) for (let k = 1; k < g.length; k++) L += VF.hav(g[k - 1].lat, g[k - 1].lon, g[k].lat, g[k].lon); return L; }
+function edInfo() {
+  const r = ED.r;
+  document.querySelectorAll('#edMode button').forEach(b => b.classList.toggle('on', b.dataset.m === ED.mode));
+  document.querySelectorAll('#edTiles button').forEach(b => b.classList.toggle('on', b.dataset.t === ED.tiles));
+  if (ED.pick) { $('edTitle').textContent = 'Нарисовать участок вручную'; $('edSub').textContent = ''; $('edCnt').style.display = 'none';
+    $('edHint').innerHTML = ED.pick === 'A' ? '<b>Щёлкните по синему треку</b> — с этой точки начнёте рисовать (дальше трек будет заменён вашей линией). Или в любом месте карты — тогда от старта записи.' : '<b>Шаг 2.</b> Щёлкните <b>в любом месте карты</b> — это первая точка вашей линии, рисуйте дальше до дома. Или щёлкните по синему треку — там, где GPS вернулся. <button class="btn sm" id="edToEnd">до конца записи</button>'; $('edDone').disabled = true;
+    if ($('edToEnd')) $('edToEnd').onclick = () => edStart(ED.pickA, ED.r.kb ?? ED.r.N - 1); return; }
+  $('edTitle').textContent = 'Дорисовать участок'; $('edSub').textContent = `${tLoc(r.R[ED.A].t)}–${tLoc(r.R[ED.B].t)} · ${hms(r.R[ED.B].t - r.R[ED.A].t)}`;
+  const last = ED.wp[ED.wp.length - 1], rest = last && ED.Bpt ? VF.hav(last.lat, last.lon, ED.Bpt.lat, ED.Bpt.lon) : 0;
+  const L = edLen(), T = ED.target, c = $('edCnt'); c.style.display = '';
+  const tot = L + rest;
+  c.className = 'edcnt num ' + (T && ED.wp.length > 1 ? (Math.abs(tot / T - 1) <= 0.08 ? 'ok' : 'far') : '');
+  c.innerHTML = `Нарисовано <b>${fmt(L / 1000, 2)}</b> км` + (T ? ` из <b>${fmt(T / 1000, 2)}</b> км по датчику` : '') + (ED.Bpt && rest > 30 ? ` · до B ${rest >= 1000 ? fmt(rest / 1000, 1) + ' км' : Math.round(rest) + ' м'}` : '');
+  $('edHint').innerHTML = '<b>Щёлкайте по карте</b> — линия тянется за точками по дорогам. Точки можно ставить сколько угодно часто. <b>Тащите</b> точку — сдвинуть, <b>тащите линию</b> — вставить точку, <b>правый клик</b> по точке — удалить. Колёсико — масштаб. Ctrl+Z — отменить. <b>A и B можно тащить</b> — куда угодно; у синего трека они цепляются за него.' + (ED.join ? ' <b>Чтобы закончить — щёлкните по синему треку</b> там, где он снова правильный; если рисуете до финиша — просто «Готово».' : '') + (ED.Bpt ? ' Ведите линию до точки B — при «Готово» последняя точка соединится с B коротким прямым отрезком.' : ' <b>Точки B нет — финишем станет последняя поставленная точка</b> (например, ваш дом).');
+  $('edDone').disabled = ED.legs.some(g => !g) || (ED.wp.length < 2 && !(ED.Bpt && ED.wp.length === 1 && ED.wp[0].fixed));
+}
+let edSeq = 0;
+async function edRoute() {
+  const my = ++edSeq, need = [];
+  ED.legs.length = Math.max(0, ED.wp.length - 1);
+  for (let i = 0; i < ED.wp.length - 1; i++) { const a = ED.wp[i], b = ED.wp[i + 1], k = `${b.mode}|${a.lat},${a.lon}|${b.lat},${b.lon}`; if (ED.legKey[i] !== k) { ED.legs[i] = null; ED.legKey[i] = k; need.push(i); } }
+  ED.legKey.length = ED.legs.length; edInfo(); edDraw();
+  if (!need.length) return;
+  $('edBusy').style.display = 'block'; let fail = 0;
+  await Promise.all(need.map(async i => { const a = ED.wp[i], b = ED.wp[i + 1], k = ED.legKey[i];
+    let g = await routeLeg(a, b, b.mode); if (!g) { fail++; g = [a, b]; } if (ED.legKey[i] === k) ED.legs[i] = g; }));
+  if (my === edSeq) $('edBusy').style.display = 'none';
+  if (fail) { if (ED.mode !== 'line') { ED.mode = 'line'; ED.wp.forEach(w => { if (w.mode && w.mode !== 'line') w.mode = 'line'; }); }
+    if (!edRoute.warned) { edRoute.warned = true; toast('Сервис прокладки по дорогам не отвечает с вашего интернета — рисую прямыми. Ставьте точки почаще: они прилипают к дорогам на карте.', 8000); } }
+  edInfo(); edDraw();
+}
+function edSnap() { ED.undo.push(JSON.stringify(ED.wp)); if (ED.undo.length > 300) ED.undo.shift(); }
+function openEditor(f, A, B, existing, extend) {
+  const r = f.res; ED.f = f; ED.r = r; ED.join = false; ED.undo = []; ED.legs = []; ED.legKey = []; ED.hot = null; ED.pick = null; ED.pickA = null; ED.pickHover = null; ED.Bpt = null; ED.wp = []; ED.mouse = null; ED.ins = null;
+  $('ed').classList.add('open'); edResize();
+  if (A == null) { ED.pick = 'A'; ED.A = 0; ED.B = r.N - 1; Object.assign(ED, M.fitBox(M.bounds(), ED.w, ED.h, 60)); edInfo(); edDraw(); return; }
+  edStart(A, B, existing, null, extend);
+}
+function simplifyPts(pts, tol) { // Douglas–Peucker in metres
+  if (pts.length < 3) return pts.slice(); const k = Math.cos(pts[0].lat * Math.PI / 180), X = p => [p.lon * 111320 * k, p.lat * 110540];
+  const P = pts.map(X), keep = new Array(pts.length).fill(false); keep[0] = keep[pts.length - 1] = true; const st = [[0, pts.length - 1]];
+  while (st.length) { const [a, b] = st.pop(); let md = 0, mi = -1; const [ax, ay] = P[a], [bx, by] = P[b], dx = bx - ax, dy = by - ay, L = Math.hypot(dx, dy) || 1;
+    for (let i = a + 1; i < b; i++) { const d = Math.abs((P[i][0] - ax) * dy - (P[i][1] - ay) * dx) / L; if (d > md) { md = d; mi = i; } }
+    if (md > tol) { keep[mi] = true; st.push([a, mi], [mi, b]); } }
+  return pts.filter((p, i) => keep[i]);
+}
+function edStart(A, B, existing, freeStart, extend) {
+  const r = ED.r; ED.pick = null; ED.gapB = null;
+  if (false && extend && !existing) { // «Дорисовать»: the recorded track ~400 m before and after the gap is editable too
+    const ok = i => r.R[i].lat != null && !r.badReason[i], ka = r.ka ?? 0, kb = r.kb ?? r.N - 1, D = r.finalDist;
+    let a = A; while (a - 1 >= ka && ok(a - 1) && D[A] - D[a - 1] <= 400) a--;
+    let b = B; if (B < kb) { while (b + 1 <= kb && ok(b + 1) && D[b + 1] - D[B] <= 400) b++; }
+    ED.gapB = B; A = a; B = b; }
+  ED.A = A; ED.B = B; ED.legs = []; ED.legKey = [];
+  ED.target = r.hasDist && r.sensor ? r.finalDist[B] - r.finalDist[A] : null;
+  const has = i => r.R[i].lat != null && !r.badReason[i];
+  ED.Bpt = has(B) && !ED.join ? { lat: r.R[B].lat, lon: r.R[B].lon } : null;
+  if (existing && existing.wp) { ED.wp = existing.wp.map(w => ({ ...w })); if (ED.Bpt) { const l = ED.wp[ED.wp.length - 1]; if (l && l.fixed && ED.wp.length > 1) ED.wp.pop(); } }
+  else ED.wp = freeStart ? [{ lat: freeStart.lat, lon: freeStart.lon, fixed: false }] : has(A) ? [{ lat: r.R[A].lat, lon: r.R[A].lon, fixed: true }] : [];
+  // the section has a recorded track → put it into the editor as editable points (drag / delete / insert like in gpx.studio)
+  if (false) { const rec = []; for (let i = A + 1; i < B; i++) if (r.R[i].lat != null && !r.badReason[i]) rec.push({ lat: r.R[i].lat, lon: r.R[i].lon, idx: i });
+    if (rec.length >= 3) { const keep = simplifyPts(rec, 6); for (const p of keep) ED.wp.push({ lat: p.lat, lon: p.lon, fixed: false, mode: 'line', idx: p.idx }); if (ED.wp[0] && ED.wp[0].mode == null && ED.wp.length > 1 && !ED.wp[0].fixed) delete ED.wp[0].mode; } }
+  edFit(); edRoute();
+  { const pts = [...ED.wp]; if (ED.Bpt) pts.push(ED.Bpt); if (!pts.length) pts.push(r.R[A]); const la = pts.map(p => p.lat), lo = pts.map(p => p.lon);
+    ensureCells(Math.min(...la) - 0.01, Math.min(...lo) - 0.016, Math.max(...la) + 0.01, Math.max(...lo) + 0.016, roadsProgress).then(ok => { if (!ok) toast('Карта дорог не загрузилась — проверьте интернет. Можно рисовать прямыми.', 6000); }); }
+}
+function edClose() { $('ed').classList.remove('open'); }
+$('edCancel').onclick = () => { if (ED.wp && ED.wp.length > 2 && !confirm(VF_I18N.tr('Закрыть без сохранения нарисованного?'))) return; edClose(); };
+$('edUndo').onclick = () => { if (!ED.undo.length) return; ED.wp = JSON.parse(ED.undo.pop()); edRoute(); };
+$('edClear').onclick = () => { if (ED.pick || !ED.wp.length) return; edSnap(); ED.wp = ED.wp.filter(w => w.fixed); edRoute(); };
+document.querySelectorAll('#edMode button').forEach(b => b.onclick = () => { ED.mode = b.dataset.m; store.set('edMode', ED.mode); edInfo(); });
+document.querySelectorAll('#edTiles button').forEach(b => b.onclick = () => { ED.tiles = b.dataset.t; store.set('edTiles', ED.tiles); edInfo(); edDraw(); });
+$('edMagnet').checked = store.get('edMagnet', true); $('edMagnet').onchange = () => store.set('edMagnet', $('edMagnet').checked);
+$('edZin').onclick = () => edZoom(1, ED.w / 2, ED.h / 2); $('edZout').onclick = () => edZoom(-1, ED.w / 2, ED.h / 2); $('edZfit').onclick = () => edFit();
+function edZoom(dz, px, py) { const nz = Math.max(3, Math.min(19, ED.z + dz)); if (nz === ED.z) return; const p = edLL(px, py); ED.z = nz; ED.cx = wx(p.lon, nz) - (px - ED.w / 2); ED.cy = wy(p.lat, nz) - (py - ED.h / 2); edDraw(); }
+function edHitWp(x, y, R = 7) { let best = null, bd = R * R; ED.wp.forEach((w, i) => { if (w.fixed) return; const q = edScr(w.lat, w.lon), d = (q[0] - x) ** 2 + (q[1] - y) ** 2; if (d <= bd) { bd = d; best = i; } }); return best; }
+function edHitLeg(x, y) { let best = null, bd = 5 * 5;
+  ED.legs.forEach((g, i) => { const pts = g || [ED.wp[i], ED.wp[i + 1]]; for (let k = 1; k < pts.length; k++) { const [x1, y1] = edScr(pts[k - 1].lat, pts[k - 1].lon), [x2, y2] = edScr(pts[k].lat, pts[k].lon), dx = x2 - x1, dy = y2 - y1, L2 = dx * dx + dy * dy, u = L2 ? Math.max(0, Math.min(1, ((x - x1) * dx + (y - y1) * dy) / L2)) : 0, d = (x1 + u * dx - x) ** 2 + (y1 + u * dy - y) ** 2; if (d < bd) { bd = d; best = i; } } });
+  return best; }
+function edPickIdx(x, y, lo = 0, hi = Infinity, R = 16) { const r = ED.r; let best = null, bd = R * R; for (let i = Math.max(0, lo); i < Math.min(r.N, hi + 1); i++) { if (r.trimmed && r.trimmed[i]) continue; const p = r.R[i]; if (p.lat == null || r.badReason[i]) continue; const q = edScr(p.lat, p.lon), d = (q[0] - x) ** 2 + (q[1] - y) ** 2; if (d < bd) { bd = d; best = i; } } return best; }
+{
+  // gpx.studio-style: a click ALWAYS adds a point at the end of the line (however close to others);
+  // dragging a point moves it, dragging the line inserts a point, dragging empty map pans, right-click deletes.
+  let drag = null; const rel = e => { const b = edCv.getBoundingClientRect(); return [e.clientX - b.left, e.clientY - b.top]; };
+  edCv.addEventListener('contextmenu', e => e.preventDefault());
+  edCv.addEventListener('pointerdown', e => { const [x, y] = rel(e); edCv.setPointerCapture(e.pointerId);
+    if (e.button === 2) { if (ED.pick) return; const w = edHitWp(x, y, 9); if (w != null) { edSnap(); const nx = ED.wp[w + 1]; ED.wp.splice(w, 1); if (nx && nx.mode == null) nx.mode = ED.mode; edRoute(); return; }
+      const l = edHitLeg(x, y); if (l != null) { edSnap(); const b = ED.wp[l + 1]; b.mode = b.mode === 'line' ? (ED.mode === 'line' ? 'free' : ED.mode) : 'line'; edRoute(); } return; }
+    if (e.button !== 0) return;
+    let anchor = null;
+    if (!ED.pick) { const near = p => { if (!p) return false; const q = edScr(p.lat, p.lon); return (q[0] - x) ** 2 + (q[1] - y) ** 2 <= 11 * 11; };
+      if (ED.wp[0] && ED.wp[0].fixed && near(ED.wp[0])) anchor = 'A'; else if (near(ED.Bpt)) anchor = 'B'; }
+    const w = ED.pick || anchor ? null : edHitWp(x, y), l = ED.pick || anchor || w != null ? null : edHitLeg(x, y);
+    drag = { x, y, cx: ED.cx, cy: ED.cy, moved: false, wp: w, leg: l, anchor }; });
+  edCv.addEventListener('pointermove', e => { const [x, y] = rel(e); ED.mouse = [x, y];
+    if (drag) { if (!drag.moved && Math.abs(x - drag.x) + Math.abs(y - drag.y) > 5) { drag.moved = true; ED.dragging = true;
+        if (drag.wp != null || drag.anchor) edSnap();
+        else if (drag.leg != null) { edSnap(); const b = ED.wp[drag.leg + 1]; ED.wp.splice(drag.leg + 1, 0, { ...edLL(x, y), fixed: false, mode: b.mode }); drag.wp = drag.leg + 1; } }
+      if (drag.moved && drag.anchor) { // slide A / B along the recorded track
+        const r = ED.r, i = drag.anchor === 'A' ? edPickIdx(x, y, 0, ED.B - 3, 10) : edPickIdx(x, y, ED.A + 3, Infinity, 10);
+        const p = i != null ? { lat: r.R[i].lat, lon: r.R[i].lon } : edLL(x, y);   // snaps to the track only when right on it
+        if (drag.anchor === 'A') { Object.assign(ED.wp[0], p); if (i != null) ED.A = i; if (ED.legs.length) { ED.legs[0] = null; ED.legKey[0] = null; } } else { ED.Bpt = p; if (i != null) ED.B = i; }
+        edDraw(); return; }
+      if (drag.moved) { if (drag.wp != null) { Object.assign(ED.wp[drag.wp], edLL(x, y)); for (const i of [drag.wp - 1, drag.wp]) if (i >= 0 && i < ED.legs.length) { ED.legs[i] = null; ED.legKey[i] = null; } edDraw(); }
+        else { ED.cx = drag.cx - (x - drag.x); ED.cy = drag.cy - (y - drag.y); edDraw(); } } return; }
+    if (ED.pick) { ED.pickHover = edPickIdx(x, y, 0, Infinity, 80); edDraw(); return; }
+    const h = edHitWp(x, y), l = h == null ? edHitLeg(x, y) : null; ED.hot = h;
+    const nearAB = [ED.wp[0] && ED.wp[0].fixed ? ED.wp[0] : null, ED.Bpt].some(p => { if (!p) return false; const q = edScr(p.lat, p.lon); return (q[0] - x) ** 2 + (q[1] - y) ** 2 <= 121; });
+    edCv.style.cursor = h != null || nearAB ? 'grab' : l != null ? 'pointer' : 'crosshair'; edDraw(); });
+  edCv.addEventListener('pointerleave', () => { ED.mouse = null; edDraw(); });
+  edCv.addEventListener('pointerup', e => { const [x, y] = rel(e); const d = drag; drag = null; ED.dragging = false; if (!d) return;
+    if (d.moved) { if (d.anchor) { const r = ED.r; ED.target = r.hasDist && r.sensor ? r.finalDist[ED.B] - r.finalDist[ED.A] : null; edRoute(); return; } if (d.wp != null) edRoute(); return; }
+    if (ED.pick) { // 1 click picks the start: on the track → there, elsewhere → from the beginning of the recording at that spot
+      const last = ED.r.kb ?? ED.r.N - 1, i = edPickIdx(x, y, 0, last - 3, 25);
+      ED.join = true; edStart(i ?? (ED.r.ka ?? 0), last, null, i == null ? edLL(x, y) : null); return; }
+    if (ED.join && ED.wp.length) { // drawing back onto the track ends the section there
+      const j = edPickIdx(x, y, ED.A + 3, Infinity, 12);
+      if (j != null) { const r = ED.r; ED.B = j; ED.Bpt = { lat: r.R[j].lat, lon: r.R[j].lon }; ED.join = false; ED.target = r.hasDist && r.sensor ? r.finalDist[ED.B] - r.finalDist[ED.A] : null;
+        toast('Линия соединена с треком — нажмите «Готово»'); edInfo(); edDraw(); return; } }
+    const mg = magnet(x, y) || [x, y];
+    edSnap(); const np = { ...edLL(mg[0], mg[1]), fixed: false, mode: ED.wp.length ? ED.mode : undefined };
+    const at = ED.gapB != null ? ED.wp.findIndex(w => w.idx != null && w.idx >= ED.gapB) : -1;   // inside the gap, before the recorded part after it
+    if (at > 0) ED.wp.splice(at, 0, np); else ED.wp.push(np); edRoute(); });
+  let acc = 0; edCv.addEventListener('wheel', e => { e.preventDefault(); acc += e.deltaY; if (Math.abs(acc) >= 60) { const [x, y] = rel(e); edZoom(acc < 0 ? 1 : -1, x, y); acc = 0; } }, { passive: false });
+  addEventListener('keydown', e => { if (!$('ed').classList.contains('open')) return; if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); $('edUndo').onclick(); } if (e.key === 'Escape') { e.stopPropagation(); $('edCancel').onclick(); } }, true);
+  new ResizeObserver(() => { if ($('ed').classList.contains('open')) edResize(); }).observe(edCv);
+}
+const editsKey = f => 'edits:' + f.name + ':' + f.bytes.length;
+$('edDone').onclick = async () => {
+  const f = ED.f, r = ED.r;
+  // connect the last point to B (by roads, in the current mode)
+  const last = ED.wp[ED.wp.length - 1];
+  if (ED.Bpt && last && VF.hav(last.lat, last.lon, ED.Bpt.lat, ED.Bpt.lon) > 3) { $('edDone').disabled = true; ED.wp.push({ ...ED.Bpt, fixed: true, mode: 'line' }); await edRoute(); }
+  const pts = [];
+  for (const g of ED.legs) for (const p of g || []) { const q = pts[pts.length - 1]; if (!q || q.lat !== p.lat || q.lon !== p.lon) pts.push({ lat: p.lat, lon: p.lon }); }
+  if (pts.length < 2) { toast('Поставьте хотя бы одну точку'); return; }
+  const t0 = r.R[ED.A].t, t1 = r.R[ED.B].t;
+  f.edits = (f.edits || []).filter(e => !(e.type === 'route' && e.t0 < t1 && e.t1 > t0));
+  f.edits.push({ type: 'route', t0, t1, pts, src: 'нарисовано вручную', wp: ED.wp.map(w => ({ lat: w.lat, lon: w.lon, fixed: !!w.fixed, mode: w.mode })) });
+  f.res = null; edClose(); showCurrent();
+  const nx = gapItems(f.res).find(g => g.status !== 'drawn' && g.status !== 'gpx' && g.t0 > t1);
+  if (nx) { toast(VF_I18N.tr('Следующий пропуск'), 2500); openEditor(f, nx.A, nx.B, nx.edit, true); } else toast('Участок нарисован и встроен в трек');
+};
+// ================= snap to roads (OSRM map matching) =================
+// GPS in dense city blocks drifts 20–60 m into the buildings; map matching moves it back onto the road actually ridden.
+// local map matching: each fix → nearest road (≤ 40 m, matching the direction of travel), consecutive snaps joined along the roads
+async function localMatch(r, ix, mode) {
+  const la = ix.map(i => r.R[i].lat), lo = ix.map(i => r.R[i].lon);
+  if (!(await ensureCells(Math.min(...la) - 0.004, Math.min(...lo) - 0.006, Math.max(...la) + 0.004, Math.max(...lo) + 0.006))) return null;
+  const snaps = ix.map(i => nearestEdge(r.R[i].lat, r.R[i].lon, 40));
+  if (snaps.filter(Boolean).length < ix.length * 0.6) return null;
+  const pts = []; let prev = null;
+  ix.forEach((i, k) => { const sp = snaps[k]; const p = sp ? { lat: sp.lat, lon: sp.lon } : { lat: r.R[i].lat, lon: r.R[i].lon };
+    if (prev) { const st = VF.hav(prev.lat, prev.lon, p.lat, p.lon); let seg = null;
+      if (st > 3 && snaps[k] && snaps[k - 1]) { const path = astar(prev, p, mode); if (path) { let L = 0; for (let q = 1; q < path.length; q++) L += VF.hav(path[q - 1].lat, path[q - 1].lon, path[q].lat, path[q].lon); if (L <= st * 2.2 + 40) seg = path.slice(1); } }
+      for (const q of seg || [p]) { const l = pts[pts.length - 1]; if (!l || l.lat !== q.lat || l.lon !== q.lon) pts.push(q); } }
+    else pts.push(p); prev = p; });
+  return { type: 'route', t0: r.R[ix[0]].t, t1: r.R[ix[ix.length - 1]].t, pts, src: 'привязано к дорогам', snap: true };
+}
+async function snapToRoads(f, i0, i1) {
+  const r = f.res; if (!r) return;
+  i0 = Math.max(i0 ?? 0, r.ka ?? 0); i1 = Math.min(i1 ?? r.N - 1, r.kb ?? r.N - 1);
+  const busy = (f.edits || []).filter(e => e.type === 'route');
+  const inEdit = t => busy.some(e => t >= e.t0 && t <= e.t1);
+  // measured fixes only, one every ≥ 20 m, split where GPS is missing or already drawn by hand
+  const runs = []; let cur = [], last = null;
+  for (let i = i0; i <= i1; i++) {
+    const p = r.R[i], ok = p.lat != null && !r.badReason[i] && !r.fills[i] && !inEdit(p.t);
+    if (!ok) { if (cur.length >= 5) runs.push(cur); cur = []; last = null; continue; }
+    if (!last || VF.hav(last.lat, last.lon, p.lat, p.lon) >= 20 || i === i1) { cur.push(i); last = p; }
+  }
+  if (cur.length >= 5) runs.push(cur);
+  const chunks = []; for (const run of runs) for (let k = 0; k < run.length - 1; k += 79) { const c = run.slice(k, k + 80); if (c.length >= 5) chunks.push(c); }
+  if (!chunks.length) { toast('Нечего привязывать: на этом участке нет записанного GPS'); return; }
+  const mode = store.get('edMode', 'free') === 'rules' ? 'bike' : 'foot';
+  const edits = []; let fail = 0;
+  for (let c = 0; c < chunks.length; c++) {
+    toast(VF_I18N.tr('Привязка к дорогам…') + ` ${c + 1}/${chunks.length}`, 60000);
+    const ix = chunks[c], ll = ix.map(i => `${r.R[i].lon.toFixed(6)},${r.R[i].lat.toFixed(6)}`).join(';');
+    const ts = ix.map(i => r.R[i].t + VF.FIT_EPOCH).join(';'), rad = ix.map(() => 35).join(';');
+    const loc = await localMatch(r, ix, mode === 'bike' ? 'rules' : 'free');
+    if (loc) { edits.push(loc); continue; }
+    let j = null;
+    try { j = await fetchJson(`${ROUTE_HOSTS.osrm}/routed-${mode}/match/v1/${mode}/${ll}?timestamps=${ts}&radiuses=${rad}&overview=full&geometries=geojson&tidy=true&gaps=split`); } catch (e) {}
+    if (!j || j.code !== 'Ok' || !j.matchings) { fail++; continue; }
+    j.matchings.forEach((m, mi) => {
+      const tp = j.tracepoints.map((t, k) => t && t.matchings_index === mi ? k : -1).filter(k => k >= 0);
+      if (tp.length < 3 || m.confidence < 0.2) return;
+      const a = ix[tp[0]], b = ix[tp[tp.length - 1]];
+      const pts = m.geometry.coordinates.map(([lon, lat]) => ({ lat, lon }));
+      // ends sit exactly on the snapped first/last fix
+      const sA = j.tracepoints[tp[0]].location, sB = j.tracepoints[tp[tp.length - 1]].location;
+      pts[0] = { lat: sA[1], lon: sA[0] }; pts[pts.length - 1] = { lat: sB[1], lon: sB[0] };
+      edits.push({ type: 'route', t0: r.R[a].t, t1: r.R[b].t, pts, src: 'привязано к дорогам', snap: true });
+    });
+  }
+  if (!edits.length) { toast(fail ? 'Сервис привязки недоступен (нужен интернет)' : 'Не удалось привязать трек к дорогам', 6000); return; }
+  f.edits = [...(f.edits || []), ...edits]; f.res = null; showCurrent();
+  toast(`Привязано к дорогам участков: ${edits.length}` + (fail ? ` (не получилось: ${fail})` : '') + VF_I18N.tr('. Отменить — «Убрать привязку» в блоке «Участки без GPS».'), 7000);
+}
+function unsnap(f) { f.edits = (f.edits || []).filter(e => !e.snap); f.res = null; showCurrent(); toast('Привязка к дорогам убрана'); }
+function gapItems(r) {
+  if (!r) return []; const f = cur(), out = [], ka = r.ka ?? 0, kb = r.kb ?? r.N - 1;
+  const edit = (A, B) => (f.edits || []).find(e => e.type === 'route' && e.t0 === r.R[A].t && e.t1 === r.R[B].t);
+  for (const g of r.runs) { if (g.n <= 15 || /интерп/.test(g.method) || g.srcs.includes('привязано к дорогам')) continue; const A = g.a - 1, B = g.b + 1, e = edit(A, B);
+    out.push({ A, B, t0: g.t0, t1: g.t1, len: g.sensLen ?? g.len, status: e || /нарисовано/.test(g.method) ? 'drawn' : /прям/.test(g.method) ? 'line' : /интерп/.test(g.method) ? 'gpx' : 'gpx', edit: e }); }
+  for (const u of r.unfilled) { if (u.n <= 15) continue; const A = Math.max(ka, u.a - 1), B = Math.min(kb, u.b + 1);
+    out.push({ A, B, t0: u.t0, t1: r.R[B].t, len: r.hasDist ? r.finalDist[B] - r.finalDist[A] : null, status: 'empty', edge: !!u.edge }); }
+  return out.sort((a, b) => a.t0 - b.t0);
+}
+function renderGapList(r) {
+  const items = gapItems(r), L = t => new Date((t + VF.FIT_EPOCH + r.tzOff) * 1000).toISOString().slice(11, 16);
+  const st = { empty: ['пусто', 'e'], line: ['прямая', 'e'], gpx: ['по GPX', ''], drawn: ['нарисовано', 'm'] };
+  let h = `<div class="gapbox"><div class="gaprow"><span>Участки без GPS${items.length ? ': ' + items.length : ''}</span><button class="btn sm" id="drawFree" title="Перерисовать любой участок трека — например, если GPS «плыл»">✎ Нарисовать участок</button></div>`;
+  if (items.length) h += '<div class="gaplist">' + items.map((g, k) => `<div class="gapit"><span class="num">${L(g.t0)}–${L(g.t1)}${g.len != null ? ' · ' + fmt(g.len / 1000, 1) + ' км' : ''}<span class="st ${st[g.status][1]}">${st[g.status][0]}</span></span><button class="btn sm" data-gap="${k}">${g.status === 'drawn' ? 'Изменить' : 'Дорисовать'}</button></div>`).join('') + '</div>';
+  const ns = (cur().edits || []).filter(e => e.snap).length;
+  const ne = (cur().edits || []).length;
+  if (ne) h += `<div class="gaprow" style="margin-top:6px;font-weight:500"><span class="mute">Ваших правок: ${ne}</span><button class="btn sm" id="resetEdits" title="Вернуть трек как после автоматического исправления">↺ Сбросить все правки</button></div>`;
+  h += '</div>';
+  const box = document.createElement('div'); box.innerHTML = h; $('gaps').prepend(box.firstChild);
+  $('drawFree').onclick = () => openEditor(cur(), null);
+  if ($('resetEdits')) $('resetEdits').onclick = () => { const f = cur(); f.edits = []; f.res = null; showCurrent(); toast('Правки сброшены'); };
+
+  $('gaps').querySelectorAll('[data-gap]').forEach(b => b.onclick = () => { const g = items[+b.dataset.gap]; openEditor(cur(), g.A, g.B, g.edit, true); });
+}
+
+window.__velofix = { S, M, addFiles, ED, openEditor };
 })();
 </script>
 </body>

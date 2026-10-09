@@ -18,7 +18,7 @@
 - **GPS-телепортации** — точки, сместившиеся дальше, чем вы реально проехали по датчику колеса.
 - **Дубликаты записей** и нереальную максимальную скорость.
 - **Выбросы пульса и мощности** — пульс 230 от статики ремня, 3000 Вт на ровном месте: заменяются плавным переходом.
-- **Пропуски GPS** — достраивает по вашему GPX маршрута (gpx.studio, komoot, запись телефона) или соединяет прямой.
+- **Пропуски GPS** — достраивает по вашему GPX маршрута (gpx.studio, komoot, запись телефона), рисуется прямо в программе (окно «Дорисовать участок»: точками как в gpx.studio, по дорогам — по ПДД или без, — или прямыми; схема улиц скачивается один раз и работает без VPN) или соединяет прямой.
 
 Каденс, высота и время **не изменяются**; пульс и мощность — только в местах явных сбоев. Структура FIT сохраняется — файл загружается в Strava и Garmin Connect.
 
@@ -47,7 +47,7 @@ Windows 10/11 (64-бит), Microsoft Edge или Google Chrome. Интернет
 
 `src/core.js` — обработка FIT/GPX, `src/ui.html` — интерфейс, `windows/main.go` — запускатель.
 ```
-python3 build.py 2.2.0            # собирает windows/VELO_FIX.html
+python3 build.py 2.4.0            # собирает windows/VELO_FIX.html
 cd windows && llvm-rc /C 65001 /FO app.res app.rc && llvm-cvtres /MACHINE:X64 /OUT:rsrc_windows_amd64.syso app.res
 go mod init velofix; CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "-H windowsgui -s -w" -o VELO_FIX.exe .
 ```

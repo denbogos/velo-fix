@@ -33,7 +33,7 @@ import (
 //go:embed VELO_FIX.html
 var page []byte
 
-const appVersion = "2.2.0"
+const appVersion = "2.4.0"
 const port = "47815"
 const repo = "denbogos/velo-fix"
 
@@ -611,6 +611,46 @@ func main() {
 			}
 			jsonOut(w, map[string]any{"ok": true})
 			go func() { time.Sleep(300 * time.Millisecond); stop() }()
+		}))
+		mux.HandleFunc("/api/route", guard(func(w http.ResponseWriter, r *http.Request) {
+			u, err := url.Parse(r.URL.Query().Get("u"))
+			if err != nil || u.Scheme != "https" || (u.Host != "routing.openstreetmap.de" && u.Host != "brouter.de") {
+				http.Error(w, "bad url", 400)
+				return
+			}
+			cl := &http.Client{Timeout: 20 * time.Second}
+			req, _ := http.NewRequest("GET", u.String(), nil)
+			req.Header.Set("User-Agent", "VELO-FIX/"+appVersion+" (github.com/"+repo+")")
+			resp, err := cl.Do(req)
+			if err != nil {
+				http.Error(w, err.Error(), 502)
+				return
+			}
+			defer resp.Body.Close()
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(resp.StatusCode)
+			io.Copy(w, io.LimitReader(resp.Body, 20<<20))
+		}))
+		mux.HandleFunc("/api/overpass", guard(func(w http.ResponseWriter, r *http.Request) {
+			ep := r.URL.Query().Get("ep")
+			if ep != "https://maps.mail.ru/osm/tools/overpass/api/interpreter" && ep != "https://overpass-api.de/api/interpreter" && ep != "https://overpass.kumi.systems/api/interpreter" {
+				http.Error(w, "bad endpoint", 400)
+				return
+			}
+			q, _ := io.ReadAll(io.LimitReader(r.Body, 1<<16))
+			cl := &http.Client{Timeout: 60 * time.Second}
+			req, _ := http.NewRequest("POST", ep, strings.NewReader("data="+url.QueryEscape(string(q))))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req.Header.Set("User-Agent", "VELO-FIX/"+appVersion+" (github.com/"+repo+")")
+			resp, err := cl.Do(req)
+			if err != nil {
+				http.Error(w, err.Error(), 502)
+				return
+			}
+			defer resp.Body.Close()
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(resp.StatusCode)
+			io.Copy(w, io.LimitReader(resp.Body, 200<<20))
 		}))
 		mux.HandleFunc("/api/devices", guard(func(w http.ResponseWriter, r *http.Request) {
 			devs := scanDrives()
