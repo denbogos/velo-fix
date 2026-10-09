@@ -239,6 +239,12 @@ const VF_I18N = (() => {
     ['Ведите до точки B', 'Draw up to point B'], ['и нажмите «Готово»', 'and press “Done”'], ['Ставьте точки до финиша', 'Place points to the finish'],
     ['Тащите точку — сдвинуть · тащите линию — вставить точку · правый клик — удалить · Ctrl+Z — отменить · A и B можно перетаскивать', 'Drag a point to move · drag the line to insert · right-click to delete · Ctrl+Z to undo · A and B can be dragged'],
     ['Сравнить', 'Compare'], ['Шторка: слева исправленный трек, справа исходный', 'Slider: fixed track on the left, original on the right'],
+    ['✎ Править трек', '✎ Edit track'], ['Тянуть трек мышью, срезать петли, перерисовать куски (beta)', 'Drag the track, cut loops, redraw pieces (beta)'], ['Правка трека', 'Track editing'], ['Тянуть', 'Drag'], ['Выделить кусок', 'Select piece'], ['охват', 'reach'],
+    ['По дорогам', 'By roads'], ['Перерисовать', 'Redraw'], ['Стереть', 'Erase'], ['Выйти без сохранения правок?', 'Leave without saving the edits?'], ['Правки трека сохранены', 'Track edits saved'], ['Начало и конец выделения должны быть на треке', 'The selection must start and end on the track'],
+    ['Тяните трек или точку · колёсико во время перетаскивания — шире/уже · правый клик по точке — удалить', 'Drag the track or a point · wheel while dragging — wider/narrower · right-click a point to delete'], ['Тяните трек мышью · приблизьте карту, чтобы появились точки', 'Drag the track · zoom in to see points'],
+    ['Что сделать с выделенным куском?', 'What to do with the selected piece?'], ['Щёлкните по треку — конец куска', 'Click the track — end of the piece'], ['Щёлкните по треку — начало куска (например, перед петлёй)', 'Click the track — start of the piece (e.g. before a loop)'],
+    ['Сохранить часть', 'Save part'], ['Сохранить нарисованное до последней точки, остаток пропуска дорисовать потом', 'Save what is drawn up to the last point, draw the rest of the gap later'], ['Нарисовано почти до B — нажмите «Готово»', 'Drawn almost to B — press “Done”'],
+    ['Собираю архив…', 'Building the archive…'],
     // ---- core: checks, reasons, methods
     ['Структура FIT: контрольные суммы и разбор до конца файла', 'FIT structure: checksums and parsing to the end of file'],
     ['Количество записей', 'Record count'],
