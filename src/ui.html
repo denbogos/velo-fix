@@ -234,7 +234,7 @@ body.drag #empty .box,body.drag #mapwrap{outline:3px dashed var(--acc);outline-o
   <div class="field"><span>FTP (функциональная пороговая мощность), Вт</span><input type="number" id="setFtp" min="80" max="600"></div>
   <div class="field"><span>Вес, кг (для Вт/кг)</span><input type="number" id="setW" min="30" max="200" step="0.5"></div>
   <label class="opt" style="margin:10px 0"><input type="checkbox" id="setSensor"> <span>Исправлять выбросы пульса и мощности</span></label>
-  <div id="shortcutRow" style="display:none;margin:6px 0 10px"><button class="btn sm" id="shortcutBtn">Создать ярлык на рабочем столе</button></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 10px"><span id="shortcutRow" style="display:none"><button class="btn sm" id="shortcutBtn">Создать ярлык на рабочем столе</button></span><button class="btn sm" id="wipeBtn" title="Стереть настройки, незаконченную работу, выбранную папку и скачанные схемы улиц">Стереть все данные программы</button></div>
   <p class="mute" style="font-size:12px">Карта загружается из интернета (OpenStreetMap, Esri); если интернета нет — выберите «Без карты». Сами файлы никуда не отправляются.</p>
   <div style="text-align:right;margin-top:10px"><button class="btn p" id="helpClose">Готово</button></div>
 </div></div>
@@ -291,7 +291,7 @@ const isDark = () => getComputedStyle(document.documentElement).getPropertyValue
 const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
 // ================= settings =================
-const S = { files: [], cur: null, gpx: [], view: 'after', color: store.get('color', 'speed'), tiles: store.get('tiles', 'map'), maxHr: store.get('maxHr', null), ftp: store.get('ftp', 250), weight: store.get('weight', 75), straight: store.get('straight', false), sensorFix: store.get('sensorFix', true), sel: null, fixSel: null };
+const S = { files: [], cur: null, gpx: [], view: 'after', color: store.get('color', 'speed'), tiles: store.get('tiles', 'map'), maxHr: store.get('maxHr', null), ftp: store.get('ftp', null), weight: store.get('weight', null), straight: store.get('straight', false), sensorFix: store.get('sensorFix', true), sel: null, fixSel: null };
 function setStraight(v) { S.straight = v; store.set('straight', v); for (const f of S.files) f.res = null; showCurrent(); }
 
 // ================= files =================
@@ -397,7 +397,12 @@ $('mergeBtn').onclick = () => {
 // ================= stats =================
 function stats(r) {
   const R = r.R, keep = i => !(r.trimmed && r.trimmed[i]) && !r.dups.includes(i);
-  const hrMaxCfg = S.maxHr || Math.max(185, ...R.map(x => x.hr || 0));
+  const hrAuto = Math.max(0, ...R.map(x => x.hr || 0)), hrMaxCfg = S.maxHr || Math.max(170, hrAuto);
+  // FTP not set → estimate from this ride: 95% of the best 20-minute average power
+  let ftpAuto = null; { let best = 0, sum = 0, j = 0; const P = R.map(x => x.pwr ?? 0);
+    for (let i = 0; i < R.length; i++) { sum += P[i]; while (R[i].t - R[j].t > 1200) { sum -= P[j]; j++; } if (R[i].t - R[j].t >= 1150) best = Math.max(best, sum / (i - j + 1)); }
+    if (best > 50) ftpAuto = Math.round(best * 0.95); }
+  const ftp = S.ftp || ftpAuto || 250;
   const hz = [0, 0, 0, 0, 0], pz = [0, 0, 0, 0, 0, 0];
   let hrS = 0, hrN = 0, hrMax = 0, cadS = 0, cadN = 0, pS = 0, pN = 0, pMax = 0, tempS = 0, tempN = 0, hasP = false;
   const p30 = []; let roll = [], rollS = 0;
@@ -408,12 +413,12 @@ function stats(r) {
     if (R[i].cad && moving) { cadS += R[i].cad * dt; cadN += dt; }
     if (R[i].temp != null) { tempS += R[i].temp; tempN++; }
     if (R[i].pwr != null) { hasP = hasP || R[i].pwr > 0; if (moving || R[i].pwr > 0) { pS += R[i].pwr * dt; pN += dt; pMax = Math.max(pMax, R[i].pwr);
-      const f = R[i].pwr / S.ftp; pz[f < .55 ? 0 : f < .75 ? 1 : f < .9 ? 2 : f < 1.05 ? 3 : f < 1.2 ? 4 : 5] += dt;
+      const f = R[i].pwr / ftp; pz[f < .55 ? 0 : f < .75 ? 1 : f < .9 ? 2 : f < 1.05 ? 3 : f < 1.2 ? 4 : 5] += dt;
       roll.push(R[i].pwr); rollS += R[i].pwr; if (roll.length > 30) rollS -= roll.shift(); if (roll.length === 30) p30.push(rollS / 30); } }
   }
   const np = p30.length ? Math.pow(p30.reduce((a, v) => a + v ** 4, 0) / p30.length, .25) : null;
   return { hrAvg: hrN ? hrS / hrN : null, hrMax: hrMax || null, hrMaxCfg, hz, cad: cadN ? cadS / cadN : null, temp: tempN ? tempS / tempN : null,
-    hasP, pAvg: pN ? pS / pN : null, pMax: pMax || null, np, pz };
+    hasP, pAvg: pN ? pS / pN : null, pMax: pMax || null, np, pz, ftp, ftpAuto, hrAuto };
 }
 function segStats(r, i0, i1) {
   const R = r.R, D = r.finalDist; let mv = 0, hrS = 0, hrN = 0, pS = 0, pN = 0, up = 0, pa = null;
@@ -491,8 +496,8 @@ function renderSide() {
   $('colorSeg').querySelector('[data-c=hr]').disabled = !st.hrAvg;
   if (st.hasP) {
     const tot = st.pz.reduce((a, v) => a + v, 0) || 1, pc = ['#94a3b8', '#60a5fa', '#34d399', '#fbbf24', '#fb923c', '#f87171'];
-    $('ftpBtn').textContent = `FTP ${S.ftp} Вт ▾`;
-    $('pw').innerHTML = `<div class="pwn"><div><span>Средняя</span><b>${Math.round(st.pAvg)}</b><small>Вт</small></div><div><span>Норм. (NP)</span><b>${st.np ? Math.round(st.np) : '—'}</b><small>Вт</small></div><div><span>Макс.</span><b>${st.pMax}</b><small>Вт</small></div><div><span>Вт/кг</span><b>${fmt((st.np || st.pAvg) / S.weight, 2)}</b></div></div>
+    $('ftpBtn').textContent = `FTP ${st.ftp} Вт${S.ftp ? '' : ' (авто)'} ▾`;
+    $('pw').innerHTML = `<div class="pwn"><div><span>Средняя</span><b>${Math.round(st.pAvg)}</b><small>Вт</small></div><div><span>Норм. (NP)</span><b>${st.np ? Math.round(st.np) : '—'}</b><small>Вт</small></div><div><span>Макс.</span><b>${st.pMax}</b><small>Вт</small></div><div><span>Вт/кг</span><b>${S.weight ? fmt((st.np || st.pAvg) / S.weight, 2) : '—'}</b>${S.weight ? '' : '<small>вес?</small>'}</div></div>
       <div class="pz">${st.pz.map((v, k) => `<i style="width:${v / tot * 100}%;background:${pc[k]}" title="Z${k + 1}: ${Math.round(v / 60)} мин"></i>`).join('')}</div>
       <div class="pzl">${st.pz.map((v, k) => `<span>Z${k + 1} ${Math.round(v / tot * 100)}%</span>`).join('')}</div>`;
   }
@@ -504,15 +509,25 @@ function renderSide() {
     : '<div class="mute" style="padding:0 18px">Нет данных пульса</div>';
 }
 $('chkBtn').onclick = () => $('chk').classList.toggle('open');
-const openSettings = () => { $('setHr').value = S.maxHr || (cur() && cur().stats ? cur().stats.hrMaxCfg : 190); $('setFtp').value = S.ftp; $('setW').value = S.weight; $('setSensor').checked = S.sensorFix; $('shortcutRow').style.display = IS_APP ? '' : 'none'; $('helpModal').classList.add('open'); };
+const openSettings = () => { const st = cur() && cur().stats;
+  $('setHr').value = S.maxHr || ''; $('setHr').placeholder = st && st.hrAuto ? VF_I18N.tr('авто') + ': ' + Math.max(170, st.hrAuto) : VF_I18N.tr('авто');
+  $('setFtp').value = S.ftp || ''; $('setFtp').placeholder = st && st.ftpAuto ? VF_I18N.tr('авто') + ': ' + st.ftpAuto : VF_I18N.tr('авто');
+  $('setW').value = S.weight || ''; $('setW').placeholder = VF_I18N.tr('не указан'); $('setSensor').checked = S.sensorFix; $('shortcutRow').style.display = IS_APP ? '' : 'none'; $('helpModal').classList.add('open'); };
 $('ftpBtn').onclick = openSettings; $('hrBtn').onclick = openSettings;
 $('helpBtn').onclick = openSettings; $('helpLink').onclick = openSettings;
 $('helpClose').onclick = () => {
   const hr = +$('setHr').value, ftp = +$('setFtp').value, w = +$('setW').value;
-  if (hr >= 120 && hr <= 230) { S.maxHr = hr; store.set('maxHr', hr); } if (ftp >= 50) { S.ftp = ftp; store.set('ftp', ftp); } if (w >= 30) { S.weight = w; store.set('weight', w); }
+  S.maxHr = hr >= 120 && hr <= 230 ? hr : null; S.ftp = ftp >= 50 && ftp <= 700 ? ftp : null; S.weight = w >= 30 && w <= 200 ? w : null;
+  store.set('maxHr', S.maxHr); store.set('ftp', S.ftp); store.set('weight', S.weight);
   $('helpModal').classList.remove('open');
   if ($('setSensor').checked !== S.sensorFix) { S.sensorFix = $('setSensor').checked; store.set('sensorFix', S.sensorFix); for (const f of S.files) f.res = null; showCurrent(); return; }
   for (const f of S.files) if (f.res) f.stats = stats(f.res); renderSide();
+};
+$('wipeBtn').onclick = async () => {
+  if (!confirm(VF_I18N.tr('Стереть все данные программы на этом компьютере: настройки (пульс, FTP, вес), незаконченную работу, папку сохранения и схемы улиц?'))) return;
+  try { for (let i = localStorage.length - 1; i >= 0; i--) { const k = localStorage.key(i); if (k && k.startsWith('velofix.')) localStorage.removeItem(k); } } catch (e) {}
+  try { await new Promise(res => { const q = indexedDB.deleteDatabase('velofix'); q.onsuccess = q.onerror = q.onblocked = res; }); } catch (e) {}
+  location.reload();
 };
 $('helpModal').onclick = e => { if (e.target === $('helpModal')) $('helpClose').onclick(); };
 $('sideToggle').onclick = () => $('body').classList.toggle('showside');
@@ -1358,62 +1373,6 @@ $('edDone').onclick = async () => {
 };
 // ================= snap to roads (OSRM map matching) =================
 // GPS in dense city blocks drifts 20–60 m into the buildings; map matching moves it back onto the road actually ridden.
-// local map matching: each fix → nearest road (≤ 40 m, matching the direction of travel), consecutive snaps joined along the roads
-async function localMatch(r, ix, mode) {
-  const la = ix.map(i => r.R[i].lat), lo = ix.map(i => r.R[i].lon);
-  if (!(await ensureCells(Math.min(...la) - 0.004, Math.min(...lo) - 0.006, Math.max(...la) + 0.004, Math.max(...lo) + 0.006))) return null;
-  const snaps = ix.map(i => nearestEdge(r.R[i].lat, r.R[i].lon, 40));
-  if (snaps.filter(Boolean).length < ix.length * 0.6) return null;
-  const pts = []; let prev = null;
-  ix.forEach((i, k) => { const sp = snaps[k]; const p = sp ? { lat: sp.lat, lon: sp.lon } : { lat: r.R[i].lat, lon: r.R[i].lon };
-    if (prev) { const st = VF.hav(prev.lat, prev.lon, p.lat, p.lon); let seg = null;
-      if (st > 3 && snaps[k] && snaps[k - 1]) { const path = astar(prev, p, mode); if (path) { let L = 0; for (let q = 1; q < path.length; q++) L += VF.hav(path[q - 1].lat, path[q - 1].lon, path[q].lat, path[q].lon); if (L <= st * 2.2 + 40) seg = path.slice(1); } }
-      for (const q of seg || [p]) { const l = pts[pts.length - 1]; if (!l || l.lat !== q.lat || l.lon !== q.lon) pts.push(q); } }
-    else pts.push(p); prev = p; });
-  return { type: 'route', t0: r.R[ix[0]].t, t1: r.R[ix[ix.length - 1]].t, pts, src: 'привязано к дорогам', snap: true };
-}
-async function snapToRoads(f, i0, i1) {
-  const r = f.res; if (!r) return;
-  i0 = Math.max(i0 ?? 0, r.ka ?? 0); i1 = Math.min(i1 ?? r.N - 1, r.kb ?? r.N - 1);
-  const busy = (f.edits || []).filter(e => e.type === 'route');
-  const inEdit = t => busy.some(e => t >= e.t0 && t <= e.t1);
-  // measured fixes only, one every ≥ 20 m, split where GPS is missing or already drawn by hand
-  const runs = []; let cur = [], last = null;
-  for (let i = i0; i <= i1; i++) {
-    const p = r.R[i], ok = p.lat != null && !r.badReason[i] && !r.fills[i] && !inEdit(p.t);
-    if (!ok) { if (cur.length >= 5) runs.push(cur); cur = []; last = null; continue; }
-    if (!last || VF.hav(last.lat, last.lon, p.lat, p.lon) >= 20 || i === i1) { cur.push(i); last = p; }
-  }
-  if (cur.length >= 5) runs.push(cur);
-  const chunks = []; for (const run of runs) for (let k = 0; k < run.length - 1; k += 79) { const c = run.slice(k, k + 80); if (c.length >= 5) chunks.push(c); }
-  if (!chunks.length) { toast('Нечего привязывать: на этом участке нет записанного GPS'); return; }
-  const mode = store.get('edMode', 'free') === 'rules' ? 'bike' : 'foot';
-  const edits = []; let fail = 0;
-  for (let c = 0; c < chunks.length; c++) {
-    toast(VF_I18N.tr('Привязка к дорогам…') + ` ${c + 1}/${chunks.length}`, 60000);
-    const ix = chunks[c], ll = ix.map(i => `${r.R[i].lon.toFixed(6)},${r.R[i].lat.toFixed(6)}`).join(';');
-    const ts = ix.map(i => r.R[i].t + VF.FIT_EPOCH).join(';'), rad = ix.map(() => 35).join(';');
-    const loc = await localMatch(r, ix, mode === 'bike' ? 'rules' : 'free');
-    if (loc) { edits.push(loc); continue; }
-    let j = null;
-    try { j = await fetchJson(`${ROUTE_HOSTS.osrm}/routed-${mode}/match/v1/${mode}/${ll}?timestamps=${ts}&radiuses=${rad}&overview=full&geometries=geojson&tidy=true&gaps=split`); } catch (e) {}
-    if (!j || j.code !== 'Ok' || !j.matchings) { fail++; continue; }
-    j.matchings.forEach((m, mi) => {
-      const tp = j.tracepoints.map((t, k) => t && t.matchings_index === mi ? k : -1).filter(k => k >= 0);
-      if (tp.length < 3 || m.confidence < 0.2) return;
-      const a = ix[tp[0]], b = ix[tp[tp.length - 1]];
-      const pts = m.geometry.coordinates.map(([lon, lat]) => ({ lat, lon }));
-      // ends sit exactly on the snapped first/last fix
-      const sA = j.tracepoints[tp[0]].location, sB = j.tracepoints[tp[tp.length - 1]].location;
-      pts[0] = { lat: sA[1], lon: sA[0] }; pts[pts.length - 1] = { lat: sB[1], lon: sB[0] };
-      edits.push({ type: 'route', t0: r.R[a].t, t1: r.R[b].t, pts, src: 'привязано к дорогам', snap: true });
-    });
-  }
-  if (!edits.length) { toast(fail ? 'Сервис привязки недоступен (нужен интернет)' : 'Не удалось привязать трек к дорогам', 6000); return; }
-  f.edits = [...(f.edits || []), ...edits]; f.res = null; showCurrent();
-  toast(`Привязано к дорогам участков: ${edits.length}` + (fail ? ` (не получилось: ${fail})` : '') + VF_I18N.tr('. Отменить — «Убрать привязку» в блоке «Участки без GPS».'), 7000);
-}
-function unsnap(f) { f.edits = (f.edits || []).filter(e => !e.snap); f.res = null; showCurrent(); toast('Привязка к дорогам убрана'); }
 function askNext(f, nx) {
   const r = f.res, L = t => new Date((t + VF.FIT_EPOCH + r.tzOff) * 1000).toISOString().slice(11, 16), en = VF_I18N.lang === 'en';
   const t = $('toast'); clearTimeout(toast.t); t.style.display = 'block';

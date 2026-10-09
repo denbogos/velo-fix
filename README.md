@@ -123,7 +123,7 @@ Windows 10 / 11 (64-бит) и Microsoft Edge или Google Chrome. Права �
 `src/core.js` — разбор и исправление FIT/GPX · `src/ui.html` — интерфейс · `src/i18n.js` — английский перевод · `windows/main.go` — запускатель.
 
 ```bash
-python3 build.py 2.5.0            # собирает windows/VELO_FIX.html
+python3 build.py 2.5.1            # собирает windows/VELO_FIX.html
 cd windows && llvm-rc /C 65001 /FO app.res app.rc && llvm-cvtres /MACHINE:X64 /OUT:rsrc_windows_amd64.syso app.res
 go mod init velofix; CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "-H windowsgui -s -w" -o VELO_FIX.exe .
 ```

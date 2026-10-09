@@ -245,6 +245,8 @@ const VF_I18N = (() => {
     ['Что сделать с выделенным куском?', 'What to do with the selected piece?'], ['Щёлкните по треку — конец куска', 'Click the track — end of the piece'], ['Щёлкните по треку — начало куска (например, перед петлёй)', 'Click the track — start of the piece (e.g. before a loop)'],
     ['Сохранить часть', 'Save part'], ['Сохранить нарисованное до последней точки, остаток пропуска дорисовать потом', 'Save what is drawn up to the last point, draw the rest of the gap later'], ['Нарисовано почти до B — нажмите «Готово»', 'Drawn almost to B — press “Done”'],
     ['Собираю архив…', 'Building the archive…'],
+    ['авто', 'auto'], ['не указан', 'not set'], ['вес?', 'weight?'], ['Стереть все данные программы', 'Erase all app data'], ['Стереть настройки, незаконченную работу, выбранную папку и скачанные схемы улиц', 'Erase settings, unfinished work, the chosen folder and downloaded street maps'],
+    ['Стереть все данные программы на этом компьютере: настройки (пульс, FTP, вес), незаконченную работу, папку сохранения и схемы улиц?', 'Erase all app data on this computer: settings (HR, FTP, weight), unfinished work, save folder and street maps?'],
     // ---- core: checks, reasons, methods
     ['Структура FIT: контрольные суммы и разбор до конца файла', 'FIT structure: checksums and parsing to the end of file'],
     ['Количество записей', 'Record count'],
