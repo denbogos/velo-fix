@@ -1,0 +1,747 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VELO FIX</title>
+<!--FAVICON-->
+<style>
+:root{--acc:#fc4c02;--acc-ink:#fff;--bg:#f5f6f8;--panel:#fff;--panel2:#f6f7f9;--ink:#14171c;--mute:#5f6773;--line:#e3e6ea;--elev:#e4e7ec;--ok:#059669;--warn:#d97706;--bad:#dc2626;--hr:#e11d48;--pw:#9333ea;--shadow:0 2px 8px rgba(16,24,40,.12);--map:#eef0ea;--tipbg:#fff}
+:root[data-theme=dark]{--acc:#fc5200;--bg:#0e1013;--panel:#15181d;--panel2:#1c2027;--ink:#e6e8eb;--mute:#8b93a1;--line:#262b33;--elev:#2b313b;--ok:#34d399;--warn:#fbbf24;--bad:#f87171;--hr:#fb7185;--pw:#c084fc;--shadow:0 2px 10px rgba(0,0,0,.45);--map:#1b1e24;--tipbg:#1c2027}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--acc:#fc5200;--bg:#0e1013;--panel:#15181d;--panel2:#1c2027;--ink:#e6e8eb;--mute:#8b93a1;--line:#262b33;--elev:#2b313b;--ok:#34d399;--warn:#fbbf24;--bad:#f87171;--hr:#fb7185;--pw:#c084fc;--shadow:0 2px 10px rgba(0,0,0,.45);--map:#1b1e24;--tipbg:#1c2027}}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.45 "Segoe UI",system-ui,-apple-system,Roboto,sans-serif;-webkit-font-smoothing:antialiased;overflow:hidden}
+button,select,input{font:inherit;color:inherit}
+.num{font-variant-numeric:tabular-nums}.mute{color:var(--mute)}
+.btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:7px;padding:6px 11px;font-weight:500;display:inline-flex;gap:6px;align-items:center;cursor:pointer;white-space:nowrap;height:32px}
+.btn:hover:not(:disabled){border-color:var(--mute)}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.p{background:var(--acc);border-color:var(--acc);color:var(--acc-ink);font-weight:600}
+.btn.p:hover:not(:disabled){filter:brightness(1.06);border-color:var(--acc)}
+.btn.ic{width:32px;justify-content:center;padding:0}
+.split{display:inline-flex}.split .btn:first-child{border-radius:7px 0 0 7px}.split .btn:last-child{border-radius:0 7px 7px 0;border-left:1px solid rgba(255,255,255,.35);width:30px;padding:0;justify-content:center}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden;background:var(--panel);height:32px}
+.seg button{border:0;background:none;padding:0 12px;cursor:pointer;border-right:1px solid var(--line);color:var(--ink)}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--panel2);color:var(--acc);font-weight:600;box-shadow:inset 0 -2px 0 var(--acc)}
+.seg button:disabled{opacity:.4;cursor:default}
+/* layout */
+.top{height:54px;display:flex;align-items:center;gap:10px;padding:0 14px;background:var(--panel);border-bottom:1px solid var(--line);position:relative;z-index:5}
+.logo{display:flex;align-items:center;gap:8px;white-space:nowrap;font-weight:700;letter-spacing:.01em;margin-right:4px;font-size:14px}
+.logo svg{width:26px;height:26px;border-radius:7px}
+.file{display:flex;flex-direction:column;justify-content:center;line-height:1.2;padding:0 12px;border:1px solid var(--line);border-radius:7px;min-width:240px;max-width:340px;height:38px;cursor:pointer;background:var(--panel);text-align:left}
+.file b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.file span{font-size:11px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sp{flex:1}
+.body{display:grid;grid-template-columns:minmax(0,1fr) 340px;height:calc(100% - 54px)}
+.mapcol{display:grid;grid-template-rows:minmax(0,1fr) 178px;min-width:0;min-height:0}
+#mapwrap{position:relative;overflow:hidden;background:var(--map);touch-action:none;user-select:none}
+#map{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab}
+#map:active{cursor:grabbing}
+.fl{position:absolute;display:flex;gap:8px;align-items:center;z-index:2}
+.fl .seg,.card{box-shadow:var(--shadow)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px}
+.zoom{display:flex;flex-direction:column;overflow:hidden}.zoom button{width:34px;height:32px;border:0;border-bottom:1px solid var(--line);background:var(--panel);cursor:pointer;font-size:16px}.zoom button:last-child{border:0}
+.lg{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--mute);padding:6px 10px}.lg i{width:90px;height:6px;border-radius:3px;background:linear-gradient(90deg,#2563eb,#eab308,#dc2626)}
+#tip{position:absolute;pointer-events:none;background:var(--tipbg);border:1px solid var(--line);border-radius:7px;padding:7px 10px;font-size:12px;box-shadow:var(--shadow);display:none;white-space:nowrap;z-index:3}
+#hlLabel{position:absolute;background:var(--bad);color:#fff;font-size:11px;padding:2px 7px;border-radius:5px;white-space:nowrap;display:none;z-index:2;pointer-events:none}
+.attr{position:absolute;right:56px;bottom:0;font-size:10.5px;background:rgba(255,255,255,.8);color:#333;padding:1px 6px;border-top-left-radius:5px;border-top-right-radius:5px;z-index:2}
+#empty{position:absolute;inset:0;display:grid;place-items:center;z-index:4;background:var(--map)}
+#empty .box{text-align:center;border:2px dashed var(--line);border-radius:16px;padding:40px 48px;background:var(--panel);max-width:520px}
+#empty h2{margin:12px 0 6px;font-size:20px}
+#empty p{margin:0 0 18px;color:var(--mute)}
+body.drag #empty .box,body.drag #mapwrap{outline:3px dashed var(--acc);outline-offset:-10px}
+.prof{background:var(--panel);border-top:1px solid var(--line);display:grid;grid-template-rows:auto minmax(0,1fr) auto;padding:7px 14px 5px;min-height:0}
+.ph{display:flex;gap:14px;align-items:center;font-size:11.5px;min-height:22px}
+.ph i{display:inline-block;width:10px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
+#segStat{margin-left:auto;display:flex;gap:10px;align-items:center}
+#segStat b{font-weight:600}
+#prof{width:100%;height:100%;display:block;cursor:crosshair}
+.ax{display:flex;justify-content:space-between;font-size:10.5px;color:var(--mute);padding-top:2px}
+/* side */
+.side{background:var(--panel);border-left:1px solid var(--line);overflow-y:auto;overflow-x:hidden}
+.hero{padding:14px 18px 12px;border-bottom:1px solid var(--line)}
+.hero .t{font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.08em}
+.hero .d{font-size:32px;font-weight:700;letter-spacing:-.02em;line-height:1.15}.hero .d small{font-size:16px;font-weight:600;margin-left:4px}
+.pill{display:inline-flex;gap:6px;align-items:center;font-size:11.5px;padding:2px 9px;border-radius:99px;font-weight:600;margin-top:4px}
+.pill.ok{background:color-mix(in srgb,var(--ok) 14%,transparent);color:var(--ok)}
+.pill.n{background:var(--panel2);color:var(--mute)}
+.tiles{display:grid;grid-template-columns:1fr 1fr 1fr;border-bottom:1px solid var(--line)}
+.tl{padding:9px 14px;border-right:1px solid var(--line);border-top:1px solid var(--line);min-width:0}
+.tl:nth-child(3n){border-right:0}.tl:nth-child(-n+3){border-top:0}
+.tl span{display:block;font-size:10.5px;color:var(--mute)}.tl b{font-size:16px;font-weight:650}
+.tl s{display:block;font-size:10.5px;color:var(--mute)}.tl em{display:block;font-style:normal;font-size:10.5px;color:var(--mute)}
+.sec{border-bottom:1px solid var(--line)}
+.sh{display:flex;align-items:center;gap:8px;padding:10px 18px 8px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--mute);font-weight:600}
+.sh .sp{flex:1}.sh .r{letter-spacing:0;text-transform:none;font-weight:600}
+.lnk{border:0;background:none;color:var(--acc);cursor:pointer;padding:0;font-weight:600;letter-spacing:0;text-transform:none}
+.fx{padding:0 10px 10px}
+.fi{display:grid;grid-template-columns:4px 1fr auto;gap:10px;padding:6px 8px;border-radius:7px;align-items:center;cursor:pointer;width:100%;border:0;background:none;text-align:left}
+.fi:hover{background:var(--panel2)}.fi.on{background:var(--panel2);outline:1px solid var(--line)}
+.fi i{align-self:stretch;border-radius:2px;min-height:30px}.fi b{font-weight:600;display:block}.fi .mute{font-size:11.5px}.fi em{font-style:normal;font-size:12px;font-weight:600;white-space:nowrap}
+.pw{padding:0 18px 12px}
+.pwn{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px}
+.pwn span{display:block;font-size:10.5px;color:var(--mute)}.pwn b{font-size:16px;font-weight:650}.pwn small{font-size:11px;color:var(--mute);margin-left:2px}
+.pz{display:flex;height:10px;border-radius:5px;overflow:hidden;gap:2px;background:var(--panel2)}.pz i{display:block;height:100%}
+.pzl{display:flex;justify-content:space-between;font-size:10px;color:var(--mute);margin-top:4px}
+.z{display:grid;grid-template-columns:22px 104px 1fr 34px 34px;gap:7px;align-items:center;padding:2px 18px;font-size:12px}
+.zb{height:6px;background:var(--panel2);border-radius:3px}.zb i{display:block;height:100%;border-radius:3px}
+.zones{padding-bottom:10px}
+.opts{padding:2px 18px 14px;display:grid;gap:8px}
+.opt{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--mute);cursor:pointer}
+.opt input{margin-top:2px;accent-color:var(--acc)}
+.chk{padding:0 18px 12px;display:none}.chk.open{display:block}
+.chk div{display:flex;gap:8px;padding:3px 0;font-size:12px}.chk .ok{color:var(--ok)}.chk .no{color:var(--warn)}.chk .in{color:var(--mute)}
+.gaps{padding:0 12px 4px;font-size:12px}
+.gapbox{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 10px;margin:0 0 8px;display:grid;gap:6px}
+.gaprow{display:flex;align-items:center;gap:8px;justify-content:space-between;flex-wrap:wrap;font-weight:600}
+.seg.sm{height:26px}.seg.sm button{padding:0 9px;font-size:12px}.btn.sm{height:28px;font-size:12px;justify-self:start}
+.upd{display:none;align-items:center;gap:8px;background:color-mix(in srgb,var(--acc) 14%,var(--panel));border:1px solid var(--acc);color:var(--ink);border-radius:7px;padding:0 10px;height:32px;font-size:12.5px;font-weight:600;text-decoration:none}
+.upd.on{display:inline-flex}
+/* menus & modal */
+.menu{position:absolute;background:var(--panel);border:1px solid var(--line);border-radius:9px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:6px;min-width:260px;z-index:20;display:none}
+.menu.open{display:block}
+.menu button{display:flex;gap:10px;width:100%;text-align:left;border:0;background:none;padding:8px 10px;border-radius:6px;cursor:pointer;align-items:center}
+.menu button:hover:not(:disabled){background:var(--panel2)}.menu button:disabled{opacity:.45;cursor:default}
+.menu .sepl{height:1px;background:var(--line);margin:5px 4px}
+.menu .cap{font-size:11px;color:var(--mute);padding:6px 10px 2px;text-transform:uppercase;letter-spacing:.07em}
+.menu .fileit{display:grid;grid-template-columns:8px 1fr auto auto;gap:9px}
+.menu .fileit .dot{width:8px;height:8px;border-radius:50%}
+.menu .fileit small{color:var(--mute)}
+.menu .x{color:var(--mute);padding:0 4px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;place-items:center;z-index:30}
+.modal.open{display:grid}
+.modal .in{background:var(--panel);border-radius:14px;max-width:680px;width:calc(100% - 32px);max-height:calc(100% - 40px);overflow:auto;padding:22px 26px;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+.modal h2{margin:0 0 10px;font-size:19px}.modal ol{padding-left:20px}.modal li{margin-bottom:9px}
+.field{display:grid;grid-template-columns:1fr 110px;gap:10px;align-items:center;margin:8px 0}
+.field input{padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel2)}
+#toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:9px;font-weight:500;display:none;z-index:40;box-shadow:var(--shadow);max-width:80%}
+@media (max-width:1050px){.body{grid-template-columns:1fr}.side{display:none}.body.showside .side{display:block;position:fixed;right:0;top:54px;bottom:0;width:340px;z-index:6;box-shadow:var(--shadow)}#sideToggle{display:inline-flex!important}.hide-narrow{display:none!important}.file{min-width:160px}}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="logo"><svg viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="var(--acc)"/><path d="M14 48 C24 48 20 33 31 32 C42 31 39 17 50 16" fill="none" stroke="#fff" stroke-width="5.2" stroke-linecap="round"/><circle cx="14" cy="48" r="6" fill="#fff"/><circle cx="50" cy="16" r="6" fill="#fff"/><circle cx="50" cy="16" r="2.6" fill="var(--acc)"/></svg>VELO FIX</div>
+  <button class="file" id="fileBtn" disabled><b id="fileTitle">Нет тренировки</b><span id="fileSub">Откройте FIT-файл</span></button>
+  <button class="btn ic" id="addBtn" title="Добавить файлы (FIT, GPX)">＋</button>
+  <div class="sp"></div>
+  <div class="seg" id="viewSeg"><button data-v="after" class="on">Исправлено</button><button data-v="before">Исходник</button></div>
+  <div class="sp"></div>
+  <button class="btn hide-narrow" id="mergeBtn" disabled title="Склеить все загруженные FIT в одну тренировку">Склеить</button>
+  <button class="btn hide-narrow" id="pngBtn" disabled title="Сохранить картинку карты с треком">PNG</button>
+  <div class="split"><button class="btn p" id="saveBtn" disabled>Сохранить FIT</button><button class="btn p" id="saveMenuBtn" disabled title="Другие форматы">▾</button></div>
+  <button class="btn ic" id="sideToggle" style="display:none" title="Сводка">☰</button>
+  <a class="upd" id="upd" target="_blank" rel="noopener"></a>
+  <button class="btn ic" id="themeBtn" title="Тема"></button>
+  <button class="btn ic" id="helpBtn" title="Как пользоваться">?</button>
+</div>
+<div class="body" id="body">
+  <div class="mapcol">
+    <div id="mapwrap">
+      <canvas id="map"></canvas>
+      <div class="fl" style="left:12px;top:12px"><div class="seg" id="colorSeg"><button data-c="speed" class="on">Скорость</button><button data-c="hr">Пульс</button><button data-c="power">Мощность</button></div></div>
+      <div class="fl" style="right:12px;top:12px"><div class="seg" id="tileSeg"><button data-t="map" class="on">Карта</button><button data-t="sat">Спутник</button><button data-t="none">Без карты</button></div></div>
+      <div class="fl card zoom" style="right:12px;bottom:14px"><button id="zin" title="Приблизить">＋</button><button id="zout" title="Отдалить">－</button><button id="zfit" title="Весь трек">⤢</button></div>
+      <div class="fl card" style="left:12px;bottom:14px;flex-direction:column;align-items:flex-start;gap:0"><div class="lg" id="legend"><span>—</span><i></i><span>—</span></div><div class="lg" id="legend2" style="padding-top:0;display:none"></div></div>
+      <div id="tip"></div><div id="hlLabel"></div><div class="attr" id="attr"></div>
+      <div id="empty"><div class="box">
+        <svg viewBox="0 0 64 64" width="56" height="56"><rect width="64" height="64" rx="14" fill="var(--acc)"/><path d="M14 48 C24 48 20 33 31 32 C42 31 39 17 50 16" fill="none" stroke="#fff" stroke-width="5.2" stroke-linecap="round"/><circle cx="14" cy="48" r="6" fill="#fff"/><circle cx="50" cy="16" r="6" fill="#fff"/></svg>
+        <h2>Перетащите сюда FIT-файл</h2>
+        <p>Можно сразу несколько тренировок, а также GPX с реальным маршрутом — по нему восстановятся участки без GPS.</p>
+        <button class="btn p" id="openBtn" style="height:38px;padding:0 20px">Открыть файлы</button>
+        <p style="margin:14px 0 0;font-size:12px">Файлы обрабатываются только на этом компьютере. <button class="lnk" id="helpLink">Как пользоваться</button></p>
+      </div></div>
+    </div>
+    <div class="prof">
+      <div class="ph"><span><i style="background:var(--elev);height:8px"></i>Высота</span><span><i style="background:var(--acc)"></i>Скорость</span><span><i style="background:var(--hr)"></i>Пульс</span><span id="pwLeg"><i style="background:var(--pw)"></i>Мощность</span>
+        <div id="segStat" class="num mute">Выделите участок мышью — статистика отрезка</div><button class="btn sm" id="splitBtn" title="Разделить тренировку на две части в выбранной точке">✂ Разделить</button></div>
+      <canvas id="prof"></canvas>
+      <div class="ax num" id="axis"></div>
+    </div>
+  </div>
+  <aside class="side" id="side">
+    <div class="hero"><div class="t">Дистанция</div><div class="d num" id="heroD">—</div><div id="heroPill"></div></div>
+    <div class="tiles num" id="tiles"></div>
+    <div class="sec"><div class="sh">Исправления · <span id="fixN">0</span><span class="sp"></span><button class="lnk r" id="chkBtn"></button></div>
+      <div class="chk" id="chk"></div><div class="fx" id="fixes"></div><div class="gaps" id="gaps"></div></div>
+    <div class="sec" id="pwSec"><div class="sh">Мощность<span class="sp"></span><button class="lnk r" id="ftpBtn"></button></div><div class="pw num" id="pw"></div></div>
+    <div class="sec"><div class="sh">Зоны пульса<span class="sp"></span><button class="lnk r" id="hrBtn"></button></div><div class="zones" id="zones"></div></div>
+    <div class="sec" style="border:0"><div class="sh">Настройки</div><div class="opts">
+      <div class="mute" style="font-size:12px">Сохранение: <span id="saveTo"></span></div>
+    </div></div>
+  </aside>
+</div>
+<input type="file" id="inp" multiple accept=".fit,.gpx" hidden>
+<div class="menu" id="fileMenu"></div>
+<div class="menu" id="saveMenu"></div>
+<div class="modal" id="helpModal"><div class="in">
+  <h2>Как пользоваться VELO FIX <span class="mute" style="font-size:13px;font-weight:500">версия /*VERSION*/</span></h2>
+  <ol>
+    <li><b>Откройте файлы.</b> Перетащите в окно один или несколько <b>.fit</b> с велокомпьютера (или нажмите «＋»). Если есть GPX с реальным маршрутом (нарисованный в gpx.studio, трек из komoot, запись с телефона) — добавьте его: по нему восстановятся участки, где пропал GPS.</li>
+    <li><b>Программа сразу всё исправит:</b> ложные километры, «фантомное движение» (GPS «едет» 100+ км/ч, пока вы стоите), GPS-телепортации, дубликаты записей, нереальную максимальную скорость. Пульс, каденс, мощность, высота и время не меняются.</li>
+    <li><b>Проверьте результат.</b> Справа — сводка: зачёркнутым показано, что было. Нажмите на исправление — карта покажет участок. Переключатель «Исправлено / Исходник» сверху показывает трек до и после. Наведите курсор на трек или на график — увидите время, скорость, пульс, мощность. Выделите участок на графике мышью — получите статистику отрезка.</li>
+    <li><b>Несколько файлов.</b> Переключайтесь между тренировками кнопкой с названием слева вверху. Если велокомпьютер разбил заезд на части — нажмите «Склеить».</li>
+    <li><b>Сохраните.</b> «Сохранить FIT» — файл для Strava / Garmin Connect. Стрелка ▾ рядом — GPX, отчёт, таблица изменений, архив, сохранение всех тренировок сразу и выбор постоянной папки. «PNG» — картинка карты с треком.</li>
+    <li><b>Обрезка и разделение.</b> Выделите участок на графике → «Оставить только его». Кнопка «✂ Разделить» и щелчок по графику или треку делит тренировку на две части. Если в конце записи вы ехали на транспорте, программа сама предложит обрезать.</li>
+    <li><b>Загрузка в Strava:</b> удалите исходную тренировку, затем «+» → «Загрузить действие» → «Файл» → выберите *_RESTORED.fit.</li>
+  </ol>
+  <h2 style="margin-top:18px">Параметры спортсмена</h2>
+  <div class="field"><span>Максимальный пульс, уд/мин</span><input type="number" id="setHr" min="120" max="230"></div>
+  <div class="field"><span>FTP (функциональная пороговая мощность), Вт</span><input type="number" id="setFtp" min="80" max="600"></div>
+  <div class="field"><span>Вес, кг (для Вт/кг)</span><input type="number" id="setW" min="30" max="200" step="0.5"></div>
+  <p class="mute" style="font-size:12px">Карта загружается из интернета (OpenStreetMap, Esri); если интернета нет — выберите «Без карты». Сами файлы никуда не отправляются.</p>
+  <div style="text-align:right;margin-top:10px"><button class="btn p" id="helpClose">Готово</button></div>
+</div></div>
+<div id="toast"></div>
+<script>
+/*CORE*/
+</script>
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const store = { get(k, d) { try { const v = localStorage.getItem('velofix.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem('velofix.' + k, JSON.stringify(v)); } catch (e) {} } };
+const fmt = (v, d = 1) => v == null || !isFinite(v) ? '—' : v.toLocaleString('ru-RU', { minimumFractionDigits: d, maximumFractionDigits: d });
+const hms = s => s == null ? '—' : VF.hms(Math.round(s));
+function toast(msg, ms = 3500) { const t = $('toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', ms); }
+
+// ================= theme =================
+const themes = ['auto', 'light', 'dark'];
+function applyTheme() { const t = store.get('theme', 'auto'); if (t === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', t);
+  $('themeBtn').innerHTML = ({auto:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor"/></svg>`,light:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>`,dark:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>`})[t]; $('themeBtn').title = 'Тема: ' + (t === 'auto' ? 'как в Windows' : t === 'light' ? 'светлая' : 'тёмная'); M.draw(); drawProfile(); }
+$('themeBtn').onclick = () => { const t = store.get('theme', 'auto'); store.set('theme', themes[(themes.indexOf(t) + 1) % 3]); applyTheme(); };
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { M.draw(); drawProfile(); });
+const isDark = () => getComputedStyle(document.documentElement).getPropertyValue('--bg').trim().toLowerCase() === '#0e1013';
+const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+// ================= settings =================
+const S = { files: [], cur: null, gpx: [], view: 'after', color: store.get('color', 'speed'), tiles: store.get('tiles', 'map'), maxHr: store.get('maxHr', null), ftp: store.get('ftp', 250), weight: store.get('weight', 75), straight: store.get('straight', false), sel: null, fixSel: null };
+function setStraight(v) { S.straight = v; store.set('straight', v); for (const f of S.files) f.res = null; showCurrent(); }
+
+// ================= files =================
+let uid = 0;
+async function addFiles(list) {
+  let firstNew = null, gpxAdded = false;
+  for (const f of list) {
+    if (/\.gpx$/i.test(f.name)) { const g = VF.parseGpx(await f.text(), f.name); S.gpx = S.gpx.filter(x => x.name !== g.name); S.gpx.push(g); gpxAdded = true; continue; }
+    if (!/\.fit$/i.test(f.name)) continue;
+    const entry = { id: ++uid, name: f.name, bytes: new Uint8Array(await f.arrayBuffer()), res: null, err: null };
+    S.files = S.files.filter(x => x.name !== entry.name); S.files.push(entry); if (!firstNew) firstNew = entry;
+  }
+  if (gpxAdded) for (const f of S.files) f.res = null;
+  if (firstNew) S.cur = firstNew.id;
+  if (!S.files.length) { toast(gpxAdded ? 'GPX добавлен. Теперь откройте FIT-файл тренировки.' : 'Нужен файл .fit'); return; }
+  showCurrent(true);
+  if (gpxAdded && !firstNew) toast('GPX маршрута добавлен — пропуски пересчитаны');
+}
+const cur = () => S.files.find(f => f.id === S.cur);
+function process(f) {
+  if (f.res || f.err) return;
+  try { f.res = VF.run(f.bytes, S.gpx, { fillStraight: S.straight, trim: f.trim || null }); f.stats = stats(f.res); }
+  catch (e) { console.error(e); f.err = e.message || String(e); }
+}
+function fileStatus(f) { if (f.err) return ['var(--bad)', 'ошибка']; if (!f.res) return ['var(--line)', '']; const n = fixList(f.res).length; return n ? ['var(--warn)', `исправлено ${n}`] : ['var(--ok)', 'в порядке']; }
+function showCurrent(fit) {
+  const f = cur(); S.sel = null; S.fixSel = null; M.hover = null;
+  $('empty').style.display = f ? 'none' : 'grid'; $('side').style.visibility = f && !f.err ? 'visible' : 'hidden';
+  for (const id of ['saveBtn', 'saveMenuBtn', 'pngBtn', 'fileBtn']) $(id).disabled = !f;
+  $('mergeBtn').disabled = S.files.length < 2;
+  if (!f) { $('fileTitle').textContent = 'Нет тренировки'; $('fileSub').textContent = 'Откройте FIT-файл'; return; }
+  process(f);
+  if (f.err) { toast('Не удалось обработать ' + f.name + ': ' + f.err, 6000); }
+  const r = f.res;
+  $('fileTitle').textContent = (r ? rideTitle(r) : f.name) + (S.files.length > 1 ? ' ▾' : '');
+  $('fileSub').textContent = `${f.name} · ${S.files.indexOf(f) + 1} из ${S.files.length}` + (S.gpx.length ? ` · GPX: ${S.gpx.length}` : '');
+  M.res = r; renderSide(); renderAxis(); setColor(S.color, true);
+  if (fit) { M.resize(); M.fit(); } else M.draw();
+  drawProfile(); renderSegStat();
+}
+function rideTitle(r) {
+  const d = new Date((r.R[0].t + VF.FIT_EPOCH + r.tzOff) * 1000), h = d.getUTCHours();
+  const part = h < 5 ? 'Ночной' : h < 12 ? 'Утренний' : h < 17 ? 'Дневной' : h < 22 ? 'Вечерний' : 'Ночной';
+  return `${part} заезд · ${String(d.getUTCDate()).padStart(2, '0')}.${String(d.getUTCMonth() + 1).padStart(2, '0')}.${d.getUTCFullYear()}`;
+}
+$('addBtn').onclick = () => $('inp').click(); $('openBtn').onclick = () => $('inp').click();
+$('inp').onchange = () => { addFiles([...$('inp').files]); $('inp').value = ''; };
+let dragN = 0;
+addEventListener('dragenter', e => { e.preventDefault(); dragN++; document.body.classList.add('drag'); });
+addEventListener('dragleave', e => { dragN--; if (dragN <= 0) { dragN = 0; document.body.classList.remove('drag'); } });
+addEventListener('dragover', e => e.preventDefault());
+addEventListener('drop', e => { e.preventDefault(); dragN = 0; document.body.classList.remove('drag'); addFiles([...e.dataTransfer.files]); });
+
+// file menu
+function openMenu(menu, anchor, alignRight) {
+  closeMenus(); const r = anchor.getBoundingClientRect(); menu.classList.add('open');
+  menu.style.top = (r.bottom + 6) + 'px';
+  if (alignRight) { menu.style.left = 'auto'; menu.style.right = (innerWidth - r.right) + 'px'; } else { menu.style.right = 'auto'; menu.style.left = r.left + 'px'; }
+}
+function closeMenus() { document.querySelectorAll('.menu').forEach(m => m.classList.remove('open')); }
+addEventListener('click', e => { if (!e.target.closest('.menu') && !e.target.closest('#fileBtn') && !e.target.closest('#saveMenuBtn')) closeMenus(); });
+addEventListener('keydown', e => { if (e.key === 'Escape') { closeMenus(); $('helpModal').classList.remove('open'); } });
+$('fileBtn').onclick = () => {
+  const m = $('fileMenu');
+  let h = '<div class="cap">Тренировки</div>';
+  for (const f of S.files) { const [c, st] = fileStatus(f); h += `<button class="fileit" data-id="${f.id}"><span class="dot" style="background:${c}"></span><span>${esc(f.name)}${f.id === S.cur ? ' ✓' : ''}</span><small>${st}</small><span class="x" data-del="${f.id}" title="Убрать">×</span></button>`; }
+  if (S.gpx.length) { h += '<div class="sepl"></div><div class="cap">Маршруты GPX</div>'; for (const g of S.gpx) h += `<button class="fileit" disabled><span class="dot" style="background:var(--mute)"></span><span>${esc(g.name)}</span><small>эталон</small><span class="x" data-gdel="${esc(g.name)}">×</span></button>`; }
+  h += '<div class="sepl"></div><button data-act="add">＋ Добавить файлы…</button>';
+  m.innerHTML = h; openMenu(m, $('fileBtn'));
+  m.querySelectorAll('[data-id]').forEach(b => b.onclick = e => { if (e.target.dataset.del) { S.files = S.files.filter(f => f.id !== +e.target.dataset.del); if (S.cur === +e.target.dataset.del) S.cur = S.files.length ? S.files[0].id : null; closeMenus(); showCurrent(true); return; } S.cur = +b.dataset.id; closeMenus(); showCurrent(true); });
+  m.querySelectorAll('[data-gdel]').forEach(x => x.onclick = e => { e.stopPropagation(); S.gpx = S.gpx.filter(g => g.name !== x.dataset.gdel); for (const f of S.files) f.res = null; closeMenus(); showCurrent(); });
+  m.querySelector('[data-act=add]').onclick = () => { closeMenus(); $('inp').click(); };
+};
+$('mergeBtn').onclick = () => {
+  try {
+    const fits = S.files.filter(f => !f.merged);
+    const out = VF.merge(fits.map(f => f.bytes));
+    const name = 'Склейка_' + fits.map(f => f.name.replace(/\.fit$/i, '')).join('+').slice(0, 60) + '.fit';
+    const e = { id: ++uid, name, bytes: out, res: null, err: null, merged: true };
+    S.files.push(e); S.cur = e.id; showCurrent(true); toast(`Склеено файлов: ${fits.length}. Новая тренировка — «${name}»`);
+  } catch (e) { toast('Склеить не получилось: ' + e.message, 6000); }
+};
+
+// ================= stats =================
+function stats(r) {
+  const R = r.R, keep = i => !(r.trimmed && r.trimmed[i]) && !r.dups.includes(i);
+  const hrMaxCfg = S.maxHr || Math.max(185, ...R.map(x => x.hr || 0));
+  const hz = [0, 0, 0, 0, 0], pz = [0, 0, 0, 0, 0, 0];
+  let hrS = 0, hrN = 0, hrMax = 0, cadS = 0, cadN = 0, pS = 0, pN = 0, pMax = 0, tempS = 0, tempN = 0, hasP = false;
+  const p30 = []; let roll = [], rollS = 0;
+  for (let i = 1; i < R.length; i++) {
+    if (!keep(i)) continue; const dt = R[i].t - R[i - 1].t; if (dt > 5) { roll = []; rollS = 0; continue; }
+    const moving = (r.newSpd[i] ?? 0) > 0.8;
+    const hr = R[i].hr; if (hr) { hrS += hr * dt; hrN += dt; hrMax = Math.max(hrMax, hr); const f = hr / hrMaxCfg; hz[f < .6 ? 0 : f < .7 ? 1 : f < .8 ? 2 : f < .9 ? 3 : 4] += dt; }
+    if (R[i].cad && moving) { cadS += R[i].cad * dt; cadN += dt; }
+    if (R[i].temp != null) { tempS += R[i].temp; tempN++; }
+    if (R[i].pwr != null) { hasP = hasP || R[i].pwr > 0; if (moving || R[i].pwr > 0) { pS += R[i].pwr * dt; pN += dt; pMax = Math.max(pMax, R[i].pwr);
+      const f = R[i].pwr / S.ftp; pz[f < .55 ? 0 : f < .75 ? 1 : f < .9 ? 2 : f < 1.05 ? 3 : f < 1.2 ? 4 : 5] += dt;
+      roll.push(R[i].pwr); rollS += R[i].pwr; if (roll.length > 30) rollS -= roll.shift(); if (roll.length === 30) p30.push(rollS / 30); } }
+  }
+  const np = p30.length ? Math.pow(p30.reduce((a, v) => a + v ** 4, 0) / p30.length, .25) : null;
+  return { hrAvg: hrN ? hrS / hrN : null, hrMax: hrMax || null, hrMaxCfg, hz, cad: cadN ? cadS / cadN : null, temp: tempN ? tempS / tempN : null,
+    hasP, pAvg: pN ? pS / pN : null, pMax: pMax || null, np, pz };
+}
+function segStats(r, i0, i1) {
+  const R = r.R, D = r.finalDist; let mv = 0, hrS = 0, hrN = 0, pS = 0, pN = 0, up = 0, pa = null;
+  for (let i = i0 + 1; i <= i1; i++) { const dt = R[i].t - R[i - 1].t; if (dt <= 5 && (r.newSpd[i] ?? 0) > 0.8) mv += dt;
+    if (R[i].hr) { hrS += R[i].hr; hrN++; } if (R[i].pwr != null) { pS += R[i].pwr; pN++; }
+    if (R[i].alt != null) { if (pa != null && R[i].alt > pa) up += R[i].alt - pa; pa = R[i].alt; } }
+  const dist = D[i1] - D[i0];
+  return { dist, mv, el: R[i1].t - R[i0].t, avg: mv ? dist / mv * 3.6 : null, hr: hrN ? hrS / hrN : null, p: pN ? pS / pN : null, up, from: D[i0], to: D[i1] };
+}
+
+// ================= fixes =================
+function fixList(r) {
+  const out = [], L = t => new Date((t + VF.FIT_EPOCH + r.tzOff) * 1000).toISOString().slice(11, 16);
+  for (const p of r.phantomBlocks) out.push({ sev: 'bad', a: p.a, b: p.b, title: 'Фантомное движение', sub: `${L(p.t0)}–${L(p.t1)} · ${Math.round(p.maxV)} км/ч без педалирования`, val: '−' + fmt(p.odo / 1000, 1) + ' км', label: `Фантом ${Math.round(p.maxV)} км/ч · −${fmt(p.odo / 1000, 1)} км` });
+  for (const j of r.jumps) out.push({ sev: 'warn', a: Math.max(0, j.i - 30), b: Math.min(r.N - 1, j.i + 30), title: 'Скачок одометра', sub: `${L(j.t1)}${j.paused ? ' · во время паузы' : ''}`, val: '−' + (j.orig - j.repl >= 1000 ? fmt((j.orig - j.repl) / 1000, 1) + ' км' : Math.round(j.orig - j.repl) + ' м'), label: `Скачок одометра +${Math.round(j.orig)} м` });
+  // group removed GPS points (non-phantom) into runs
+  const idx = Object.keys(r.badReason).map(Number).filter(i => !r.badReason[i].startsWith('фантом')).sort((a, b) => a - b);
+  const groups = []; for (const i of idx) { const g = groups[groups.length - 1]; if (g && i - g.b <= 60) g.b = i, g.n++; else groups.push({ a: i, b: i, n: 1 }); }
+  if (groups.length) { const n = idx.length, A = groups[0].a, B = groups[groups.length - 1].b;
+    out.push({ sev: 'warn', a: A, b: B, groups, title: 'GPS-телепортации', sub: `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'точка' : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? 'точки' : 'точек'} на ${groups.length} участк${groups.length === 1 ? 'е' : 'ах'}`, val: String(n), label: 'Удалённые точки GPS' }); }
+  for (const g of r.runs.filter(x => x.n > 15)) out.push({ sev: 'info', a: g.a, b: g.b, title: 'Пропуск GPS восстановлен', sub: `${L(g.t0)}–${L(g.t1)} · ${g.srcs.join(' → ')} · ${g.conf}`, val: fmt(g.sensLen != null ? g.sensLen / 1000 : g.len / 1000, 1) + ' км', label: 'Восстановлено по ' + g.srcs.join(' → ') });
+  if (r.phantomTimer) out.push({ sev: 'acc', a: r.phantomBlocks[0].a, b: r.phantomBlocks[r.phantomBlocks.length - 1].b, title: 'Время движения', sub: 'фантом считался ездой', val: '−' + hms(r.phantomTimer), label: 'Время движения пересчитано' });
+  if (r.dups.length) out.push({ sev: 'info', a: r.dups[0], b: r.dups[0], title: 'Дубликаты записей', sub: 'побайтовые копии удалены', val: String(r.dups.length), label: 'Дубликат записи' });
+  return out;
+}
+
+// ================= side panel =================
+function renderSide() {
+  const f = cur(), r = f && f.res; if (!r) { $('heroD').textContent = '—'; $('tiles').innerHTML = ''; $('fixes').innerHTML = ''; return; }
+  const b = r.before, a = r.after, st = f.stats;
+  $('heroD').innerHTML = `${fmt(a.dist / 1000, 2)}<small>км</small>`;
+  const dd = (b.dist - a.dist) / 1000;
+  $('heroPill').innerHTML = dd > 0.05 ? `<span class="pill ok">✓ убрано ${fmt(dd, 2)} км ложного пробега</span>` : `<span class="pill n">✓ дистанция без изменений</span>`;
+  const was = (x, y, d) => Math.abs(x - y) > Math.pow(10, -d) / 2 ? `<s>было ${fmt(x, d)}</s>` : '';
+  const tile = (t, v, extra) => `<div class="tl"><span>${t}</span><b>${v}</b>${extra || '<em>&nbsp;</em>'}</div>`;
+  const tiles = [
+    tile('Средняя', fmt(a.avg, 1), was(b.avg, a.avg, 1) || '<em>км/ч</em>'),
+    tile('Макс.', fmt(a.max, 1), was(b.max, a.max, 1) || '<em>км/ч</em>'),
+    tile('В движении', hms(a.timer), Math.abs(b.timer - a.timer) >= 1 ? `<s>было ${hms(b.timer)}</s>` : `<em>из ${hms(a.elapsed)}</em>`),
+    tile('Набор', a.asc != null ? a.asc + ' м' : '—', `<em>сброс ${a.desc ?? '—'}</em>`),
+    tile('Пульс', st.hrAvg ? Math.round(st.hrAvg) : '—', `<em>${st.hrMax ? 'макс. ' + st.hrMax : 'нет датчика'}</em>`),
+    st.hasP ? tile('Мощность', Math.round(st.pAvg) + ' <small style="font-size:11px;font-weight:500">Вт</small>', `<em>NP ${st.np ? Math.round(st.np) : '—'}</em>`)
+            : tile('Каденс', st.cad ? Math.round(st.cad) : '—', '<em>об/мин</em>')];
+  $('tiles').innerHTML = tiles.join('');
+  // fixes
+  const fx = fixList(r); $('fixN').textContent = fx.length;
+  const col = s => s === 'bad' ? 'var(--bad)' : s === 'warn' ? 'var(--warn)' : s === 'acc' ? 'var(--acc)' : 'var(--mute)';
+  $('fixes').innerHTML = fx.length ? fx.map((x, k) => `<button class="fi${S.fixSel === k ? ' on' : ''}" data-k="${k}"><i style="background:${col(x.sev)}"></i><div><b>${esc(x.title)}</b><div class="mute">${esc(x.sub)}</div></div><em class="num">${esc(x.val)}</em></button>`).join('')
+    : '<div class="mute" style="padding:4px 8px 6px">Ошибок не найдено — файл в порядке.</div>';
+  $('fixes').querySelectorAll('.fi').forEach(el => el.onclick = () => selectFix(+el.dataset.k));
+  // checks
+  const ch = r.checks.list, ok = ch.filter(c => c.pass).length, real = ch.filter(c => !c.info).length;
+  $('chkBtn').textContent = (ok >= real ? '✓ ' : '⚠ ') + `проверки ${ok}/${ch.length}`; $('chkBtn').style.color = ok >= real ? 'var(--ok)' : 'var(--warn)';
+  $('chk').innerHTML = ch.map(c => `<div><span class="${c.pass ? 'ok' : c.info ? 'in' : 'no'}">${c.pass ? '✓' : c.info ? 'ℹ' : '⚠'}</span><span>${esc(c.name)}<br><span class="mute">${esc(c.detail)}</span></span></div>`).join('');
+  const unf = r.unfilled.filter(u => u.n > 5);
+  const miss = r.R2.filter(x => x.lat == null).length;
+  const nStr = r.runs.filter(x => /прям/.test(x.method)).length, hasGap = miss > 0 || nStr > 0;
+  $('gaps').innerHTML = hasGap ? `<div class="gapbox"><div class="gaprow"><span>Участки без GPS:</span><div class="seg sm"><button data-s="1" class="${S.straight ? 'on' : ''}">прямой линией</button><button data-s="0" class="${S.straight ? '' : 'on'}">оставить пустыми</button></div></div>
+    <div class="mute">${S.straight ? 'Пропуски соединены прямой — на карте точечный пунктир.' : `Без координат ${miss} записей — Strava соединит их прямой сама.`} Точнее — добавьте GPX маршрута («＋»).</div></div>` : '';
+  $('gaps').querySelectorAll('[data-s]').forEach(b => b.onclick = () => setStraight(b.dataset.s === '1'));
+  const tail = r.phantomBlocks.find(p => p.a > r.N * 0.8);
+  if (tail && !f.trim) $('gaps').innerHTML += `<div class="gapbox"><b>Похоже, в конце записи вы ехали на транспорте</b><div class="mute">с ${new Date((r.R[tail.a].t + VF.FIT_EPOCH + r.tzOff) * 1000).toISOString().slice(11, 16)} — скорость до ${Math.round(tail.maxV)} км/ч без педалирования.</div><button class="btn sm" id="trimTail">Обрезать тренировку здесь</button></div>`;
+  if ($('trimTail')) $('trimTail').onclick = () => applyTrim(f, r.R[0].t, r.R[tail.a - 1].t);
+  if (f.trim) $('gaps').innerHTML += `<div class="gapbox"><b>Тренировка обрезана</b><div class="mute">${hms(f.trim.t1 - f.trim.t0)} записи из ${hms(r.R[r.N - 1].t - r.R[0].t)}</div><button class="btn sm" id="untrim">Вернуть целиком</button></div>`;
+  if ($('untrim')) $('untrim').onclick = () => { f.trim = null; f.res = null; showCurrent(true); };
+  // power
+  $('pwSec').style.display = st.hasP ? '' : 'none'; $('pwLeg').style.display = st.hasP ? '' : 'none';
+  $('colorSeg').querySelector('[data-c=power]').disabled = !st.hasP;
+  $('colorSeg').querySelector('[data-c=hr]').disabled = !st.hrAvg;
+  if (st.hasP) {
+    const tot = st.pz.reduce((a, v) => a + v, 0) || 1, pc = ['#94a3b8', '#60a5fa', '#34d399', '#fbbf24', '#fb923c', '#f87171'];
+    $('ftpBtn').textContent = `FTP ${S.ftp} Вт ▾`;
+    $('pw').innerHTML = `<div class="pwn"><div><span>Средняя</span><b>${Math.round(st.pAvg)}</b><small>Вт</small></div><div><span>Норм. (NP)</span><b>${st.np ? Math.round(st.np) : '—'}</b><small>Вт</small></div><div><span>Макс.</span><b>${st.pMax}</b><small>Вт</small></div><div><span>Вт/кг</span><b>${fmt((st.np || st.pAvg) / S.weight, 2)}</b></div></div>
+      <div class="pz">${st.pz.map((v, k) => `<i style="width:${v / tot * 100}%;background:${pc[k]}" title="Z${k + 1}: ${Math.round(v / 60)} мин"></i>`).join('')}</div>
+      <div class="pzl">${st.pz.map((v, k) => `<span>Z${k + 1} ${Math.round(v / tot * 100)}%</span>`).join('')}</div>`;
+  }
+  // hr zones
+  const zn = [['Восстановление', '#60a5fa'], ['Аэробная', '#34d399'], ['Темповая', '#fbbf24'], ['Порог', '#fb923c'], ['VO2max', '#f87171']];
+  const ztot = st.hz.reduce((a, v) => a + v, 0) || 1, zmax = Math.max(...st.hz) || 1;
+  $('hrBtn').textContent = `макс. ${st.hrMaxCfg} ▾`;
+  $('zones').innerHTML = st.hrAvg ? st.hz.map((v, k) => `<div class="z num"><span>Z${k + 1}</span><span class="mute">${zn[k][0]}</span><div class="zb"><i style="width:${v / zmax * 100}%;background:${zn[k][1]}"></i></div><span>${Math.round(v / 60)}′</span><span class="mute">${Math.round(v / ztot * 100)}%</span></div>`).join('')
+    : '<div class="mute" style="padding:0 18px">Нет данных пульса</div>';
+}
+$('chkBtn').onclick = () => $('chk').classList.toggle('open');
+const openSettings = () => { $('setHr').value = S.maxHr || (cur() && cur().stats ? cur().stats.hrMaxCfg : 190); $('setFtp').value = S.ftp; $('setW').value = S.weight; $('helpModal').classList.add('open'); };
+$('ftpBtn').onclick = openSettings; $('hrBtn').onclick = openSettings;
+$('helpBtn').onclick = openSettings; $('helpLink').onclick = openSettings;
+$('helpClose').onclick = () => {
+  const hr = +$('setHr').value, ftp = +$('setFtp').value, w = +$('setW').value;
+  if (hr >= 120 && hr <= 230) { S.maxHr = hr; store.set('maxHr', hr); } if (ftp >= 50) { S.ftp = ftp; store.set('ftp', ftp); } if (w >= 30) { S.weight = w; store.set('weight', w); }
+  $('helpModal').classList.remove('open'); for (const f of S.files) if (f.res) f.stats = stats(f.res); renderSide();
+};
+$('helpModal').onclick = e => { if (e.target === $('helpModal')) $('helpClose').onclick(); };
+$('sideToggle').onclick = () => $('body').classList.toggle('showside');
+function selectFix(k) {
+  const r = cur().res, x = fixList(r)[k];
+  if (S.fixSel === k) { S.fixSel = null; M.hl = null; renderSide(); M.draw(); return; }
+  S.fixSel = k; M.hl = x; renderSide();
+  if (x.title !== 'Пропуск GPS восстановлен' && S.view === 'after' && x.sev !== 'info') setView('before');
+  M.fitRange(x.a, x.b);
+}
+
+// ================= view / color / tiles =================
+function setView(v) { S.view = v; M.view = v; document.querySelectorAll('#viewSeg button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); M.draw(); }
+document.querySelectorAll('#viewSeg button').forEach(b => b.onclick = () => setView(b.dataset.v));
+function setColor(c, silent) {
+  const r = M.res;
+  if (r && c === 'power' && !(cur().stats || {}).hasP) c = 'speed';
+  if (r && c === 'hr' && !(cur().stats || {}).hrAvg) c = 'speed';
+  S.color = c; if (!silent) store.set('color', c);
+  document.querySelectorAll('#colorSeg button').forEach(b => b.classList.toggle('on', b.dataset.c === c));
+  if (r) {
+    const vals = []; for (let i = 0; i < r.N; i++) { const v = metric(i, c); if (v != null) vals.push(v); }
+    vals.sort((a, b) => a - b); const q = p => vals.length ? vals[Math.floor((vals.length - 1) * p)] : 0;
+    M.range = [q(.05), Math.max(q(.95), q(.05) + 1)];
+    const unit = c === 'speed' ? 'км/ч' : c === 'hr' ? 'уд/мин' : 'Вт';
+    $('legend').innerHTML = `<span class="num">${Math.round(M.range[0])}</span><i></i><span class="num">${Math.round(M.range[1])} ${unit}</span>`;
+    const fv = Object.values(r.fills), hasStr = fv.some(x => /^прям|^интерп/.test(x.src)), hasRef = fv.some(x => !/^прям|^интерп/.test(x.src));
+    const sw = (dash, col) => `<svg width="34" height="6"><line x1="2" y1="3" x2="32" y2="3" stroke="${col}" stroke-width="3" stroke-dasharray="${dash}" stroke-linecap="round"/></svg>`;
+    $('legend2').style.display = hasStr || hasRef ? 'flex' : 'none';
+    $('legend2').innerHTML = (hasRef ? `${sw('8 5', 'var(--acc)')}<span>по GPX</span>` : '') + (hasStr ? `${sw('1 6', isDark() ? '#cbd5e1' : '#475569')}<span>прямая — GPS не было</span>` : '');
+  }
+  M.draw();
+}
+function metric(i, c) {
+  const r = M.res;
+  if (c === 'speed') { let s = 0, n = 0; for (let k = Math.max(0, i - 2); k <= Math.min(r.N - 1, i + 2); k++) { const v = r.newSpd[k]; if (v != null) { s += v; n++; } } return n ? s / n * 3.6 : null; }
+  if (c === 'hr') return r.R[i].hr || null;
+  if (c === 'power') { let s = 0, n = 0; for (let k = Math.max(0, i - 4); k <= Math.min(r.N - 1, i + 4); k++) { const v = r.R[k].pwr; if (v != null) { s += v; n++; } } return n ? s / n : null; }
+}
+document.querySelectorAll('#colorSeg button').forEach(b => b.onclick = () => { if (!b.disabled) setColor(b.dataset.c); });
+function setTiles(t) { S.tiles = t; store.set('tiles', t); document.querySelectorAll('#tileSeg button').forEach(b => b.classList.toggle('on', b.dataset.t === t)); M.failed = 0; M.draw(); }
+document.querySelectorAll('#tileSeg button').forEach(b => b.onclick = () => setTiles(b.dataset.t));
+
+// ================= map =================
+const TILE = 256;
+const tileSrc = (t, z, x, y) => t === 'sat' ? `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`
+  : (location.protocol.startsWith('http') ? `https://tile.openstreetmap.org/${z}/${x}/${y}.png` : `https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/${z}/${y}/${x}`);
+const tileAttr = t => t === 'sat' ? 'Imagery © Esri, Maxar' : t === 'none' ? '' : (location.protocol.startsWith('http') ? '© OpenStreetMap contributors' : 'Tiles © Esri');
+const wx = (lon, z) => (lon + 180) / 360 * TILE * 2 ** z;
+const wy = (lat, z) => { const s = Math.sin(lat * Math.PI / 180); return (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * TILE * 2 ** z; };
+const lonOf = (x, z) => x / (TILE * 2 ** z) * 360 - 180;
+const latOf = (y, z) => { const n = Math.PI - 2 * Math.PI * y / (TILE * 2 ** z); return 180 / Math.PI * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n))); };
+function grad(t) { t = Math.max(0, Math.min(1, t)); const st = [[0, [37, 99, 235]], [.5, [234, 179, 8]], [1, [220, 38, 38]]];
+  for (let k = 0; k < 2; k++) { const [a, c1] = st[k], [b, c2] = st[k + 1]; if (t <= b) { const u = (t - a) / (b - a); return `rgb(${c1.map((v, i) => Math.round(v + (c2[i] - v) * u)).join(',')})`; } } }
+const M = {
+  cv: $('map'), z: 12, cx: 0, cy: 0, w: 0, h: 0, cache: new Map(), raf: 0, res: null, view: 'after', hover: null, hl: null, range: [0, 1], failed: 0,
+  resize() { const r = $('mapwrap').getBoundingClientRect(), d = devicePixelRatio || 1; this.w = r.width; this.h = r.height; this.cv.width = Math.round(r.width * d); this.cv.height = Math.round(r.height * d); this.draw(); },
+  ll(i) { const r = this.res; return this.view === 'after' ? r.newLL[i] : r.R[i]; },
+  bounds(a = 0, b = this.res.N - 1, both = true) { const r = this.res; let s = Infinity, n = -Infinity, w = Infinity, e = -Infinity;
+    for (let i = a; i <= b; i++) for (const p of both ? [r.newLL[i], r.R[i]] : [this.ll(i)]) if (p && p.lat != null) { s = Math.min(s, p.lat); n = Math.max(n, p.lat); w = Math.min(w, p.lon); e = Math.max(e, p.lon); }
+    return s === Infinity ? null : { s, n, w, e }; },
+  fitBox(bb, W = this.w, H = this.h, pad = 50) { let z = 2; for (let k = 17; k >= 2; k--) if (wx(bb.e, k) - wx(bb.w, k) < W - 2 * pad && wy(bb.s, k) - wy(bb.n, k) < H - 2 * pad) { z = k; break; }
+    return { z, cx: (wx(bb.w, z) + wx(bb.e, z)) / 2, cy: (wy(bb.s, z) + wy(bb.n, z)) / 2 }; },
+  measuredBounds() { const r = this.res; let s = Infinity, n = -Infinity, w = Infinity, e = -Infinity, k = 0;
+    for (let i = 0; i < r.N; i++) { if (r.trimmed && r.trimmed[i]) continue; const p = this.view === 'after' ? (r.fills[i] && /^прям|^интерп/.test(r.fills[i].src) ? null : r.newLL[i]) : (r.badReason[i] ? null : r.R[i]); if (!p || p.lat == null) continue; k++; s = Math.min(s, p.lat); n = Math.max(n, p.lat); w = Math.min(w, p.lon); e = Math.max(e, p.lon); }
+    return k > 10 ? { s, n, w, e } : null; },
+  fit() { if (!this.res) return; const b = this.measuredBounds() || this.bounds(); if (!b) return; Object.assign(this, this.fitBox(b)); this.draw(); },
+  fitRange(a, b) { const bb = this.bounds(a, b); if (!bb) return; const v = this.fitBox(bb, this.w, this.h, 110); v.z = Math.min(v.z, 16); Object.assign(this, v); this.draw(); },
+  scr(lat, lon, v = this) { return [wx(lon, v.z) - v.cx + v.w / 2, wy(lat, v.z) - v.cy + v.h / 2]; },
+  zoomAt(dz, px, py) { const nz = Math.max(2, Math.min(18, this.z + dz)); if (nz === this.z) return;
+    const lon = lonOf(this.cx + px - this.w / 2, this.z), lat = latOf(this.cy + py - this.h / 2, this.z);
+    this.z = nz; this.cx = wx(lon, nz) - (px - this.w / 2); this.cy = wy(lat, nz) - (py - this.h / 2); this.draw(); },
+  draw() { if (this.raf) return; this.raf = requestAnimationFrame(() => { this.raf = 0; this.paint(this.cv.getContext('2d'), this); }); },
+  tile(t, z, x, y, onload) { const k = t + '/' + z + '/' + x + '/' + y; let im = this.cache.get(k);
+    if (!im) { im = new Image(); im.crossOrigin = 'anonymous'; im.ok = false; im.onload = () => { im.ok = true; onload ? onload() : this.draw(); }; im.onerror = () => { im.bad = true; this.failed++; this.draw(); };
+      im.src = tileSrc(t, z, x, y); this.cache.set(k, im); if (this.cache.size > 900) this.cache.delete(this.cache.keys().next().value); }
+    return im; },
+  paint(ctx, v, opts = {}) {
+    const d = opts.scale || devicePixelRatio || 1; ctx.setTransform(d, 0, 0, d, 0, 0);
+    ctx.fillStyle = cssv('--map'); ctx.fillRect(0, 0, v.w, v.h);
+    const t = opts.tiles ?? S.tiles;
+    if (!opts.noTiles) $('attr').textContent = this.failed > 6 && t !== 'none' ? 'Карта не загрузилась (нет интернета?)' : tileAttr(t);
+    if (t !== 'none' && !opts.noTiles) {
+      const n = 2 ** v.z, x0 = Math.floor((v.cx - v.w / 2) / TILE), x1 = Math.floor((v.cx + v.w / 2) / TILE), y0 = Math.floor((v.cy - v.h / 2) / TILE), y1 = Math.floor((v.cy + v.h / 2) / TILE);
+      for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) { if (y < 0 || y >= n) continue; const im = this.tile(t, v.z, ((x % n) + n) % n, y, opts.onTile);
+        if (im.ok) ctx.drawImage(im, x * TILE - v.cx + v.w / 2, y * TILE - v.cy + v.h / 2, TILE, TILE); }
+      if (isDark() && t === 'map') { ctx.fillStyle = 'rgba(14,16,19,.42)'; ctx.fillRect(0, 0, v.w, v.h); }
+    }
+    const r = this.res; if (!r) return;
+    const P = (lat, lon) => this.scr(lat, lon, v);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    // collect segments
+    const segs = []; let prev = null, pi = -1, gap = false;
+    for (let i = 0; i < r.N; i++) {
+      if (r.trimmed && r.trimmed[i]) continue;
+      const p = this.ll(i); if (!p || p.lat == null) { gap = true; continue; }
+      if (prev) segs.push({ i, pi, gap, a: P(prev.lat, prev.lon), b: P(p.lat, p.lon) });
+      prev = p; pi = i; gap = false;
+    }
+    // casing
+    ctx.strokeStyle = isDark() ? 'rgba(0,0,0,.6)' : 'rgba(255,255,255,.9)'; ctx.lineWidth = 8; ctx.beginPath();
+    for (const s of segs) if (!s.gap && !(this.view === 'after' && r.fills[s.i] && r.fills[s.pi] && /^прям|^интерп/.test(r.fills[s.i].src))) { ctx.moveTo(...s.a); ctx.lineTo(...s.b); } ctx.stroke();
+    const [lo, hi] = this.range, bad = cssv('--bad');
+    ctx.lineWidth = 4.2;
+    for (const s of segs) {
+      if (s.gap) { ctx.setLineDash([4, 6]); ctx.strokeStyle = '#8a8f99'; ctx.lineWidth = 2.5; }
+      else if (this.view === 'before' && (r.badReason[s.i] || r.badReason[s.pi] || VF.hav(r.R[s.pi].lat, r.R[s.pi].lon, r.R[s.i].lat, r.R[s.i].lon) > 150)) { ctx.setLineDash([]); ctx.strokeStyle = bad; ctx.lineWidth = 4.2; }
+      else if (this.view === 'after' && r.fills[s.i] && r.fills[s.pi]) {
+        const src = r.fills[s.i].src;
+        if (src.startsWith('прям') || src === 'интерполяция') { ctx.setLineDash([2, 7]); ctx.strokeStyle = isDark() ? '#cbd5e1' : '#475569'; ctx.lineWidth = 3.4; }
+        else { const m = metric(s.i, S.color); ctx.setLineDash([10, 7]); ctx.strokeStyle = m == null ? '#8a8f99' : grad((m - lo) / (hi - lo)); ctx.lineWidth = 4.2; }
+      }
+      else { const m = metric(s.i, S.color); ctx.setLineDash([]); ctx.strokeStyle = m == null ? '#8a8f99' : grad((m - lo) / (hi - lo)); ctx.lineWidth = 4.2; }
+      ctx.beginPath(); ctx.moveTo(...s.a); ctx.lineTo(...s.b); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    // segment selection from profile
+    if (S.sel && !opts.clean) { ctx.strokeStyle = cssv('--acc'); ctx.globalAlpha = .55; ctx.lineWidth = 11; ctx.beginPath(); let pp = null;
+      for (let i = S.sel[0]; i <= S.sel[1]; i++) { const p = this.ll(i); if (!p || p.lat == null) { pp = null; continue; } const q = P(p.lat, p.lon); if (pp) { ctx.moveTo(...pp); ctx.lineTo(...q); } pp = q; }
+      ctx.stroke(); ctx.globalAlpha = 1; }
+    // pins
+    const first = segs.length ? segs[0].a : null, last = segs.length ? segs[segs.length - 1].b : null;
+    const pin = (q, c) => { if (!q) return; ctx.beginPath(); ctx.arc(q[0], q[1], 7.5, 0, 7); ctx.fillStyle = c; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; ctx.stroke(); };
+    pin(last, '#dc2626'); pin(first, '#16a34a');
+    // fix highlight
+    const lab = $('hlLabel');
+    if (this.hl && !opts.clean) {
+      const boxes = (this.hl.groups || [{ a: this.hl.a, b: this.hl.b }]).map(g => this.bounds(g.a, g.b)).filter(Boolean);
+      ctx.setLineDash([6, 5]); ctx.strokeStyle = bad; ctx.lineWidth = 2; ctx.fillStyle = bad.startsWith('#') ? bad + '14' : 'rgba(220,38,38,.08)';
+      let top = null;
+      for (const bb of boxes) { const [x1, y1] = P(bb.n, bb.w), [x2, y2] = P(bb.s, bb.e); const pad = 14, x = x1 - pad, y = y1 - pad, w = x2 - x1 + 2 * pad, h = y2 - y1 + 2 * pad;
+        ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, 10) : ctx.rect(x, y, w, h); ctx.fill(); ctx.stroke(); if (!top || y < top[1]) top = [x, y]; }
+      ctx.setLineDash([]);
+      if (top && v === this) { lab.style.display = 'block'; lab.textContent = this.hl.label; lab.style.left = Math.max(4, top[0]) + 'px'; lab.style.top = Math.max(4, top[1] - 24) + 'px'; } else lab.style.display = 'none';
+    } else if (v === this) lab.style.display = 'none';
+    // hover
+    if (this.hover != null && !opts.clean) { const p = this.ll(this.hover); if (p && p.lat != null) { const q = P(p.lat, p.lon); ctx.beginPath(); ctx.arc(q[0], q[1], 7, 0, 7); ctx.fillStyle = cssv('--acc'); ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke(); } }
+  },
+  nearest(px, py) { const r = this.res; let best = null, bd = 18 * 18;
+    for (let i = 0; i < r.N; i++) { const p = this.ll(i); if (!p || p.lat == null) continue; const [x, y] = this.scr(p.lat, p.lon), d = (x - px) ** 2 + (y - py) ** 2; if (d < bd) { bd = d; best = i; } } return best; }
+};
+function tipHtml(i) {
+  const r = M.res, R = r.R[i], spd = r.newSpd[i], dist = r.finalDist[i];
+  const L = new Date((R.t + VF.FIT_EPOCH + r.tzOff) * 1000).toISOString().slice(11, 19);
+  const f = r.fills[i], why = r.badReason[i];
+  return `<b class="num">${L} · ${dist != null ? fmt(dist / 1000, 2) + ' км' : ''}</b><br><span class="num">${spd != null ? fmt(spd * 3.6, 1) + ' км/ч' : ''}${R.hr != null ? ' · ♥ ' + R.hr : ''}${R.cad != null ? ' · ' + R.cad + ' об/мин' : ''}${R.pwr != null ? ' · ' + R.pwr + ' Вт' : ''}${R.alt != null ? ' · ' + Math.round(R.alt) + ' м' : ''}</span>${f ? '<br><span class="mute">восстановлено: ' + esc(f.src) + '</span>' : ''}${why && M.view === 'before' ? '<br><span style="color:var(--bad)">удалено: ' + esc(why) + '</span>' : ''}`;
+}
+function setHover(i, px, py) {
+  M.hover = i; M.draw(); drawProfile(); const tip = $('tip');
+  if (i == null) { tip.style.display = 'none'; return; }
+  if (px == null) { const p = M.ll(i); if (!p || p.lat == null) { tip.style.display = 'none'; return; } [px, py] = M.scr(p.lat, p.lon); }
+  tip.innerHTML = tipHtml(i); tip.style.display = 'block';
+  const tw = tip.offsetWidth, th = tip.offsetHeight;
+  tip.style.left = Math.min(M.w - tw - 8, Math.max(8, px + 14)) + 'px'; tip.style.top = Math.max(8, Math.min(M.h - th - 8, py - th - 12)) + 'px';
+}
+{
+  const cv = M.cv, ptrs = new Map(); let drag = null, pinch = null;
+  const rel = e => { const b = cv.getBoundingClientRect(); return [e.clientX - b.left, e.clientY - b.top]; };
+  cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, rel(e));
+    if (ptrs.size === 1) drag = { s: rel(e), cx: M.cx, cy: M.cy, moved: false }; else { const [a, b] = [...ptrs.values()]; pinch = Math.hypot(a[0] - b[0], a[1] - b[1]); drag = null; } });
+  cv.addEventListener('pointermove', e => { const p = rel(e);
+    if (ptrs.has(e.pointerId)) { ptrs.set(e.pointerId, p);
+      if (pinch && ptrs.size === 2) { const [a, b] = [...ptrs.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (Math.abs(Math.log2(d / pinch)) > 0.6) { M.zoomAt(d > pinch ? 1 : -1, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2); pinch = d; } return; }
+      if (drag) { const dx = p[0] - drag.s[0], dy = p[1] - drag.s[1]; if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true; if (drag.moved) { M.cx = drag.cx - dx; M.cy = drag.cy - dy; M.draw(); setHover(null); return; } } }
+    if (M.res) setHover(M.nearest(p[0], p[1]), p[0], p[1]); });
+  const up = e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null; if (!ptrs.size) drag = null; };
+  cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up); cv.addEventListener('pointerleave', () => { if (!ptrs.size) setHover(null); });
+  cv.addEventListener('click', e => { if (splitMode && M.hover != null) doSplit(M.hover); });
+  cv.addEventListener('dblclick', e => { const [x, y] = rel(e); M.zoomAt(1, x, y); });
+  let acc = 0; cv.addEventListener('wheel', e => { e.preventDefault(); acc += e.deltaY; if (Math.abs(acc) >= 60) { const [x, y] = rel(e); M.zoomAt(acc < 0 ? 1 : -1, x, y); acc = 0; } }, { passive: false });
+  $('zin').onclick = () => M.zoomAt(1, M.w / 2, M.h / 2); $('zout').onclick = () => M.zoomAt(-1, M.w / 2, M.h / 2); $('zfit').onclick = () => M.fit();
+  new ResizeObserver(() => { M.resize(); drawProfile(); }).observe($('mapwrap'));
+}
+
+// ================= profile =================
+const PF = { cv: $('prof'), map: null, drag: null };
+function renderAxis() {
+  const r = M.res; if (!r) { $('axis').innerHTML = ''; return; }
+  const km = r.finalDist[r.kb ?? r.N - 1] / 1000, step = km > 120 ? 20 : km > 60 ? 10 : km > 25 ? 5 : km > 8 ? 2 : 1, out = [];
+  for (let k = 0; k <= km - step * .4; k += step) out.push(`<span>${k}</span>`); out.push(`<span>${fmt(km, 0)} км</span>`); $('axis').innerHTML = out.join('');
+}
+function drawProfile() {
+  const cv = PF.cv, d = devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight; if (!W || !H) return;
+  cv.width = W * d; cv.height = H * d; const ctx = cv.getContext('2d'); ctx.setTransform(d, 0, 0, d, 0, 0); ctx.clearRect(0, 0, W, H);
+  const r = M.res; if (!r) return;
+  const dist = r.finalDist, idx = []; for (let i = 0; i < r.N; i++) if (!(r.trimmed && r.trimmed[i]) && dist[i] != null) idx.push(i);
+  if (idx.length < 2) return;
+  const d0 = dist[idx[0]], d1 = dist[idx[idx.length - 1]] || 1, X = v => (v - d0) / (d1 - d0 || 1) * W;
+  ctx.strokeStyle = cssv('--line'); ctx.lineWidth = 1; for (const f of [.25, .5, .75]) { ctx.beginPath(); ctx.moveTo(0, H * f); ctx.lineTo(W, H * f); ctx.stroke(); }
+  const alts = idx.map(i => r.R[i].alt).filter(a => a != null);
+  if (alts.length) { const a0 = Math.min(...alts), a1 = Math.max(...alts) + 1e-6, YA = a => H - 2 - (a - a0) / (a1 - a0) * (H - 10);
+    ctx.beginPath(); ctx.moveTo(X(d0), H); for (const i of idx) if (r.R[i].alt != null) ctx.lineTo(X(dist[i]), YA(r.R[i].alt)); ctx.lineTo(X(d1), H); ctx.closePath(); ctx.fillStyle = cssv('--elev'); ctx.fill(); }
+  const line = (get, max, color, win, alpha = 1, lw = 1.3) => {
+    const v = idx.map(i => get(i)); const sm = v.map((_, k) => { let s = 0, n = 0; for (let j = Math.max(0, k - win); j <= Math.min(v.length - 1, k + win); j++) if (v[j] != null) { s += v[j]; n++; } return n ? s / n : null; });
+    ctx.beginPath(); let started = false; sm.forEach((y, k) => { if (y == null) { started = false; return; } const px = X(dist[idx[k]]), py = H - 3 - Math.min(y, max) / max * (H - 10); started ? ctx.lineTo(px, py) : ctx.moveTo(px, py); started = true; });
+    ctx.strokeStyle = color; ctx.globalAlpha = alpha; ctx.lineWidth = lw; ctx.stroke(); ctx.globalAlpha = 1; };
+  const st = cur() && cur().stats;
+  if (st && st.hrAvg) line(i => r.R[i].hr ? r.R[i].hr - 80 : null, 130, cssv('--hr'), 10, .7, 1.1);
+  if (st && st.hasP) line(i => r.R[i].pwr, Math.max(400, (st.np || 250) * 2.2), cssv('--pw'), 25, .75, 1.1);
+  const vmax = Math.max(20, ...idx.map(i => (r.newSpd[i] ?? 0) * 3.6)) * 1.05;
+  line(i => r.newSpd[i] != null ? r.newSpd[i] * 3.6 : null, vmax, cssv('--acc'), 10, 1, 1.5);
+  if (S.sel) { const x1 = X(dist[S.sel[0]]), x2 = X(dist[S.sel[1]]); ctx.fillStyle = cssv('--acc'); ctx.globalAlpha = .12; ctx.fillRect(Math.min(x1, x2), 0, Math.abs(x2 - x1), H); ctx.globalAlpha = 1; }
+  if (M.hover != null && dist[M.hover] != null) { const x = X(dist[M.hover]); ctx.strokeStyle = cssv('--acc'); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+  PF.map = { idx, X, dist };
+}
+function idxAt(x) { const m = PF.map; if (!m) return null; let lo = 0, hi = m.idx.length - 1; while (hi - lo > 1) { const md = (lo + hi) >> 1; if (m.X(m.dist[m.idx[md]]) < x) lo = md; else hi = md; } return m.idx[Math.abs(m.X(m.dist[m.idx[lo]]) - x) < Math.abs(m.X(m.dist[m.idx[hi]]) - x) ? lo : hi]; }
+PF.cv.addEventListener('pointerdown', e => { if (!PF.map) return; if (splitMode) { doSplit(idxAt(e.offsetX)); return; } PF.cv.setPointerCapture(e.pointerId); PF.drag = { x: e.offsetX, i: idxAt(e.offsetX), moved: false }; });
+PF.cv.addEventListener('pointermove', e => { if (!PF.map) return; const i = idxAt(e.offsetX);
+  if (PF.drag) { if (Math.abs(e.offsetX - PF.drag.x) > 4) PF.drag.moved = true; if (PF.drag.moved) { S.sel = [Math.min(PF.drag.i, i), Math.max(PF.drag.i, i)]; renderSegStat(); } }
+  setHover(i); });
+PF.cv.addEventListener('pointerup', () => { if (PF.drag && !PF.drag.moved) { S.sel = null; renderSegStat(); } else if (S.sel) M.fitRange(S.sel[0], S.sel[1]); PF.drag = null; });
+PF.cv.addEventListener('pointerleave', () => { if (!PF.drag) setHover(null); });
+function applyTrim(f, t0, t1) { f.trim = { t0, t1 }; f.res = null; S.sel = null; showCurrent(true); toast('Тренировка обрезана. «Вернуть целиком» — в блоке исправлений.'); }
+let splitMode = false;
+$('splitBtn').onclick = () => { if (!cur() || !cur().res) return; splitMode = !splitMode; $('splitBtn').classList.toggle('p', splitMode); toast(splitMode ? 'Щёлкните по графику или по треку в месте, где разделить тренировку' : 'Разделение отменено'); };
+function doSplit(i) {
+  splitMode = false; $('splitBtn').classList.remove('p');
+  const f = cur(), r = f.res; if (i == null || i < 10 || i > r.N - 10) { toast('Выберите точку ближе к середине'); return; }
+  const t = r.R[i].t, base = f.name.replace(/\.fit$/i, ''), t0 = f.trim ? f.trim.t0 : r.R[0].t, t1 = f.trim ? f.trim.t1 : r.R[r.N - 1].t;
+  const a = { id: ++uid, name: base + '_часть1.fit', bytes: f.bytes, trim: { t0, t1: r.R[i - 1].t }, res: null, err: null };
+  const b = { id: ++uid, name: base + '_часть2.fit', bytes: f.bytes, trim: { t0: t, t1 }, res: null, err: null };
+  const k = S.files.indexOf(f); S.files.splice(k, 1, a, b); S.cur = a.id; showCurrent(true);
+  toast('Тренировка разделена на 2 части — переключайтесь кнопкой с названием слева вверху');
+}
+function renderSegStat() {
+  const el = $('segStat'), r = M.res;
+  if (!S.sel || !r) { el.className = 'num mute'; el.innerHTML = r ? 'Выделите участок мышью — статистика отрезка' : ''; M.draw(); drawProfile(); return; }
+  const s = segStats(r, S.sel[0], S.sel[1]);
+  el.className = 'num'; el.innerHTML = `<span class="mute">${fmt(s.from / 1000, 1)}–${fmt(s.to / 1000, 1)} км</span><b>${fmt(s.dist / 1000, 2)} км</b><b>${hms(s.mv)}</b><b>${fmt(s.avg, 1)} км/ч</b>${s.hr ? `<b style="color:var(--hr)">♥ ${Math.round(s.hr)}</b>` : ''}${s.p != null && cur().stats.hasP ? `<b style="color:var(--pw)">${Math.round(s.p)} Вт</b>` : ''}<b>+${Math.round(s.up)} м</b><button class="btn sm" id="segKeep" title="Оставить в тренировке только этот отрезок">Оставить только его</button><button class="lnk" id="segX" title="Сбросить">✕</button>`;
+  $('segKeep').onclick = () => { const r2 = cur().res; applyTrim(cur(), r2.R[S.sel[0]].t, r2.R[S.sel[1]].t); };
+  $('segX').onclick = () => { S.sel = null; renderSegStat(); };
+  M.draw(); drawProfile();
+}
+
+// ================= saving =================
+const canPick = typeof window.showDirectoryPicker === 'function';
+let dirHandle = null;
+const idb = (mode, fn) => new Promise((res, rej) => { try { const o = indexedDB.open('velofix', 1); o.onupgradeneeded = () => o.result.createObjectStore('kv');
+  o.onsuccess = () => { const tx = o.result.transaction('kv', mode), st = tx.objectStore('kv'); const r = fn(st); tx.oncomplete = () => res(r && r.result); tx.onerror = () => rej(tx.error); }; o.onerror = () => rej(o.error); } catch (e) { rej(e); } });
+(async () => { try { dirHandle = await idb('readonly', st => st.get('dir')) || null; } catch (e) {} renderSaveTo(); })();
+function renderSaveTo() { $('saveTo').innerHTML = !canPick ? 'в «Загрузки»' : dirHandle ? `в папку <b>${esc(dirHandle.name)}</b>` : 'спрашивать, куда'; }
+async function pickDir() { try { dirHandle = await showDirectoryPicker({ id: 'velofix-out', mode: 'readwrite' }); try { await idb('readwrite', st => st.put(dirHandle, 'dir')); } catch (e) {} renderSaveTo(); toast('Папка для сохранения: ' + dirHandle.name); return true; } catch (e) { return false; } }
+async function forgetDir() { dirHandle = null; try { await idb('readwrite', st => st.delete('dir')); } catch (e) {} renderSaveTo(); }
+async function writeToDir(name, blob) { let p = await dirHandle.queryPermission({ mode: 'readwrite' }); if (p !== 'granted') p = await dirHandle.requestPermission({ mode: 'readwrite' });
+  if (p !== 'granted') throw new Error('нет доступа к папке'); const fh = await dirHandle.getFileHandle(name, { create: true }); const w = await fh.createWritable(); await w.write(blob); await w.close(); }
+async function saveFile(name, data, type) {
+  const blob = data instanceof Blob ? data : new Blob([data], { type });
+  if (dirHandle) { try { await writeToDir(name, blob); toast(`Сохранено: ${dirHandle.name}\\${name}`); return true; } catch (e) { toast('Папка недоступна: ' + e.message); } }
+  if (typeof window.showSaveFilePicker === 'function') { const ext = name.slice(name.lastIndexOf('.'));
+    try { const fh = await showSaveFilePicker({ id: 'velofix-save', suggestedName: name, types: [{ description: ext.slice(1).toUpperCase(), accept: { [type || 'application/octet-stream']: [ext] } }] });
+      const w = await fh.createWritable(); await w.write(blob); await w.close(); toast('Сохранено: ' + fh.name); return true; } catch (e) { if (e.name === 'AbortError') return false; } }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 800); toast('Скачано в «Загрузки»: ' + name); return true;
+}
+const baseName = f => f.name.replace(/\.fit$/i, '');
+const outputs = f => { const enc = new TextEncoder(), b = baseName(f), r = f.res; return {
+  fit: [b + '_RESTORED.fit', r.out, 'application/octet-stream'], gpx: [b + '_RESTORED.gpx', enc.encode(VF.toGpx(r)), 'application/gpx+xml'],
+  md: [b + '_REPORT.md', enc.encode(VF.toReport(r, f.name)), 'text/markdown'], csv: [b + '_AUDIT.csv', enc.encode(VF.toCsv(r)), 'text/csv'] }; };
+$('saveBtn').onclick = () => { const f = cur(); if (f && f.res) saveFile(...outputs(f).fit); };
+$('saveMenuBtn').onclick = () => {
+  const m = $('saveMenu'); const fits = S.files.length;
+  m.innerHTML = `<div class="cap">Эта тренировка</div><button data-k="fit">FIT для Strava / Garmin</button><button data-k="gpx">GPX — трек для других сервисов</button><button data-k="png">PNG — картинка карты</button><button data-k="md">Отчёт об исправлениях (.md)</button><button data-k="csv">Таблица изменений (.csv)</button><button data-k="zip">Всё архивом (.zip)</button>
+    <div class="sepl"></div><div class="cap">Все тренировки</div><button data-k="all" ${fits < 2 ? 'disabled' : ''}>Сохранить все исправленные FIT (${fits})</button>
+    <div class="sepl"></div><div class="cap">Куда сохранять</div>${canPick ? `<button data-k="dir">${dirHandle ? 'Папка: ' + esc(dirHandle.name) + ' — изменить' : 'Выбрать постоянную папку…'}</button>${dirHandle ? '<button data-k="ask">Спрашивать каждый раз</button>' : ''}` : '<button disabled>В «Загрузки» (выбор папки недоступен)</button>'}`;
+  openMenu(m, $('saveMenuBtn'), true);
+  m.querySelectorAll('button[data-k]').forEach(b => b.onclick = async () => { closeMenus(); const k = b.dataset.k, f = cur();
+    if (k === 'png') return exportPng();
+    if (k === 'dir') return pickDir(); if (k === 'ask') return forgetDir();
+    if (k === 'all') return saveAll();
+    const o = outputs(f);
+    if (k === 'zip') return saveFile(baseName(f) + '_RESTORED.zip', VF.zip(Object.values(o).map(([n, d]) => ({ name: n, data: d }))), 'application/zip');
+    saveFile(...o[k]); });
+};
+async function saveAll() {
+  for (const f of S.files) process(f);
+  const ok = S.files.filter(f => f.res);
+  if (!dirHandle && canPick) { if (!(await pickDir())) return; }
+  if (dirHandle) { let n = 0; for (const f of ok) { try { const [name, d] = outputs(f).fit; await writeToDir(name, new Blob([d])); n++; } catch (e) { toast('Ошибка: ' + e.message); return; } } toast(`Сохранено тренировок: ${n} → ${dirHandle.name}`); return; }
+  saveFile('VELO_FIX_тренировки.zip', VF.zip(ok.map(f => { const [name, d] = outputs(f).fit; return { name, data: d }; })), 'application/zip');
+}
+$('pngBtn').onclick = () => exportPng();
+
+// ================= PNG export =================
+async function exportPng() {
+  const f = cur(), r = f && f.res; if (!r) return;
+  const W = 1600, H = 1000, band = 150;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const ctx = cv.getContext('2d');
+  const keepView = M.view; M.view = 'after';
+  const bb = M.bounds(0, r.N - 1, false) || M.bounds(); const v0 = M.fitBox(bb, W, H - band, 70);
+  const tw = wx(bb.e, v0.z) - wx(bb.w, v0.z), th = wy(bb.s, v0.z) - wy(bb.n, v0.z);
+  const scale = Math.max(1, Math.min(1.9, (W - 140) / Math.max(tw, 1), (H - band - 140) / Math.max(th, 1)));
+  const v = Object.assign({ w: W / scale, h: (H - band) / scale }, v0);
+  const draw = noTiles => { ctx.save(); M.paint(ctx, v, { scale, clean: true, noTiles }); ctx.restore(); };
+  // wait for tiles
+  if (S.tiles !== 'none') { await new Promise(res => { let left = 0, done = false; const fin = () => { if (!done) { done = true; res(); } };
+    const n = 2 ** v.z; for (let x = Math.floor((v.cx - v.w / 2) / TILE); x <= Math.floor((v.cx + v.w / 2) / TILE); x++) for (let y = Math.floor((v.cy - v.h / 2) / TILE); y <= Math.floor((v.cy + v.h / 2) / TILE); y++) {
+      if (y < 0 || y >= n) continue; const im = M.tile(S.tiles, v.z, ((x % n) + n) % n, y, () => { if (--left <= 0) fin(); }); if (!im.ok && !im.bad) left++; }
+    if (left <= 0) fin(); setTimeout(fin, 5000); }); }
+  draw(false);
+  // stats band
+  const a = r.after, st = f.stats, dark = isDark();
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = cssv('--panel'); ctx.fillRect(0, H - band, W, band);
+  ctx.fillStyle = cssv('--acc'); ctx.fillRect(0, H - band, W, 5);
+  ctx.fillStyle = cssv('--ink'); ctx.font = '700 30px "Segoe UI",system-ui,sans-serif'; ctx.fillText(rideTitle(r), 48, H - band + 52);
+  const items = [['Дистанция', fmt(a.dist / 1000, 2) + ' км'], ['В движении', hms(a.timer)], ['Средняя', fmt(a.avg, 1) + ' км/ч'], ['Набор', (a.asc ?? '—') + ' м']];
+  if (st.hrAvg) items.push(['Пульс', Math.round(st.hrAvg) + ' уд/мин']); if (st.hasP) items.push(['Мощность', Math.round(st.pAvg) + ' Вт']);
+  items.forEach(([t, val], k) => { const x = 48 + k * 250; ctx.fillStyle = cssv('--mute'); ctx.font = '500 17px "Segoe UI",system-ui,sans-serif'; ctx.fillText(t, x, H - band + 92); ctx.fillStyle = cssv('--ink'); ctx.font = '700 28px "Segoe UI",system-ui,sans-serif'; ctx.fillText(val, x, H - band + 126); });
+  ctx.fillStyle = cssv('--mute'); ctx.font = '500 15px "Segoe UI",system-ui,sans-serif'; ctx.textAlign = 'right'; ctx.fillText('VELO FIX' + (S.tiles !== 'none' ? ' · ' + tileAttr(S.tiles) : ''), W - 40, H - band + 52); ctx.textAlign = 'left';
+  let blob = await new Promise(res => { try { cv.toBlob(b => res(b), 'image/png'); } catch (e) { res(null); } });
+  if (!blob) { ctx.clearRect(0, 0, W, H - band); draw(true); blob = await new Promise(res => cv.toBlob(res, 'image/png')); toast('Карта-подложка не попала в картинку (ограничение сервера карт), трек сохранён'); }
+  M.view = keepView; M.draw();
+  saveFile(baseName(f) + '_map.png', blob, 'image/png');
+}
+
+setTiles(S.tiles); applyTheme(); showCurrent();
+// ================= update check =================
+const APP_VERSION = '/*VERSION*/', REPO = 'denbogos/velo-fix';
+(async () => {
+  try {
+    const last = store.get('updChecked', 0); let info = store.get('updInfo', null);
+    if (Date.now() - last > 6 * 3600e3) {
+      const ac = new AbortController(); setTimeout(() => ac.abort(), 8000);
+      const r = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { signal: ac.signal, headers: { Accept: 'application/vnd.github+json' } });
+      if (r.ok) { const j = await r.json(); info = { v: String(j.tag_name || '').replace(/^v/i, ''), url: j.html_url, notes: (j.body || '').slice(0, 300) }; store.set('updInfo', info); }
+      store.set('updChecked', Date.now());
+    }
+    const newer = (a, b) => { const x = a.split('.').map(Number), y = b.split('.').map(Number); for (let k = 0; k < 3; k++) { if ((x[k] || 0) > (y[k] || 0)) return true; if ((x[k] || 0) < (y[k] || 0)) return false; } return false; };
+    if (info && info.v && newer(info.v, APP_VERSION)) { const u = $('upd'); u.href = info.url; u.textContent = `Доступна версия ${info.v} ↗`; u.title = info.notes || 'Скачать новую версию'; u.classList.add('on'); }
+  } catch (e) { /* offline — silently ignore */ }
+})();
+window.__velofix = { S, M, addFiles };
+})();
+</script>
+</body>
+</html>
