@@ -145,6 +145,7 @@ body.drag #empty .box,body.drag #mapwrap{outline:3px dashed var(--acc);outline-o
   <div class="logo"><svg viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="var(--acc)"/><path d="M14 48 C24 48 20 33 31 32 C42 31 39 17 50 16" fill="none" stroke="#fff" stroke-width="5.2" stroke-linecap="round"/><circle cx="14" cy="48" r="6" fill="#fff"/><circle cx="50" cy="16" r="6" fill="#fff"/><circle cx="50" cy="16" r="2.6" fill="var(--acc)"/></svg>VELO FIX</div>
   <button class="file" id="fileBtn" disabled><b id="fileTitle">Нет тренировки</b><span id="fileSub">Откройте FIT-файл</span></button>
   <button class="btn ic" id="addBtn" title="Добавить файлы (FIT, GPX)">＋</button>
+  <button class="btn ic" id="histBtn" title="Отменить последнее действие (Ctrl+Z)" disabled>↶</button>
   <button class="btn hide-narrow" id="devBtn" title="Открыть заезды с подключённого Garmin / Wahoo" style="display:none"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M9 6h6M12 18h.01"/></svg>С велокомпьютера</button>
   <div class="sp"></div>
   <div class="seg" id="viewSeg"><button data-v="after" class="on">Исправлено</button><button data-v="before">Исходник</button><button data-v="compare" title="Шторка: слева исправленный трек, справа исходный">Сравнить</button></div>
@@ -234,7 +235,7 @@ body.drag #empty .box,body.drag #mapwrap{outline:3px dashed var(--acc);outline-o
   <div class="field"><span>FTP (функциональная пороговая мощность), Вт</span><input type="number" id="setFtp" min="80" max="600"></div>
   <div class="field"><span>Вес, кг (для Вт/кг)</span><input type="number" id="setW" min="30" max="200" step="0.5"></div>
   <label class="opt" style="margin:10px 0"><input type="checkbox" id="setSensor"> <span>Исправлять выбросы пульса и мощности</span></label>
-  <div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 10px"><span id="shortcutRow" style="display:none"><button class="btn sm" id="shortcutBtn">Создать ярлык на рабочем столе</button></span><button class="btn sm" id="wipeBtn" title="Стереть настройки, незаконченную работу, выбранную папку и скачанные схемы улиц">Стереть все данные программы</button></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 10px"><span id="shortcutRow" style="display:none"><button class="btn sm" id="shortcutBtn">Создать ярлык на рабочем столе</button></span><button class="btn sm" id="cityBtn" title="Один раз скачать все улицы Москвы — потом прокладка мгновенная и без интернета">Скачать улицы Москвы заранее</button><button class="btn sm" id="wipeBtn" title="Стереть настройки, незаконченную работу, выбранную папку и скачанные схемы улиц">Стереть все данные программы</button></div>
   <p class="mute" style="font-size:12px">Карта загружается из интернета (OpenStreetMap, Esri); если интернета нет — выберите «Без карты». Сами файлы никуда не отправляются.</p>
   <div style="text-align:right;margin-top:10px"><button class="btn p" id="helpClose">Готово</button></div>
 </div></div>
@@ -335,6 +336,19 @@ async function offerSession() {
     S.cur = (S.files[d.cur] || S.files[0]).id; el.style.display = 'none'; showCurrent(true); toast(VF_I18N.lang === 'en' ? 'Work restored' : 'Работа восстановлена — продолжайте'); };
   $('resNo').onclick = async () => { el.style.display = 'none'; try { await idb('readwrite', st => st.delete('session')); } catch (e) {} };
 }
+addEventListener('keydown', e => {
+  if (e.target.closest && e.target.closest('input,textarea')) return;
+  if ($('ed').classList.contains('open') || TE.on || document.querySelector('.modal.open')) return;
+  const k = e.key.toLowerCase(), c = e.ctrlKey || e.metaKey;
+  if (c && (k === 'o' || k === 'щ')) { e.preventDefault(); $('inp').click(); }
+  else if (c && (k === 's' || k === 'ы')) { e.preventDefault(); if (!$('saveBtn').disabled) $('saveBtn').click(); }
+  else if (c && (k === 'z' || k === 'я')) { e.preventDefault(); popHist(); }
+  else if (!c && cur() && cur().res) { if (k === '1') setView('after'); else if (k === '2') setView('before'); else if (k === '3') setView('compare'); else if (k === '4') teStart(); }
+});
+const HIST = [];
+function pushHist() { HIST.push({ cur: S.cur, files: S.files.map(f => ({ ...f, res: null, edits: [...(f.edits || [])], trim: f.trim ? { ...f.trim } : null })) }); if (HIST.length > 40) HIST.shift(); $('histBtn').disabled = false; }
+function popHist() { const h = HIST.pop(); if (!h) return; S.files = h.files; S.cur = h.cur; $('histBtn').disabled = !HIST.length; showCurrent(true); toast(VF_I18N.tr('Отменено')); }
+$('histBtn').onclick = popHist;
 function showCurrent(fit) {
   saveSession();
   const f = cur(); S.sel = null; S.fixSel = null; M.hover = null;
@@ -347,7 +361,7 @@ function showCurrent(fit) {
   const r = f.res;
   $('fileTitle').textContent = (r ? rideTitle(r) : f.name) + (S.files.length > 1 ? ' ▾' : '');
   $('fileSub').textContent = `${f.name} · ${S.files.indexOf(f) + 1} из ${S.files.length}` + (S.gpx.length ? ` · GPX: ${S.gpx.length}` : '');
-  M.res = r; renderSide(); renderAxis(); setColor(S.color, true);
+  M.res = r; if (r) setTimeout(() => prefetchRide(r), 1500); renderSide(); renderAxis(); setColor(S.color, true);
   if (fit) { M.resize(); M.fit(); } else M.draw();
   drawProfile(); renderSegStat();
 }
@@ -384,7 +398,7 @@ $('fileBtn').onclick = () => {
   m.querySelectorAll('[data-gdel]').forEach(x => x.onclick = e => { e.stopPropagation(); S.gpx = S.gpx.filter(g => g.name !== x.dataset.gdel); for (const f of S.files) f.res = null; closeMenus(); showCurrent(); });
   m.querySelector('[data-act=add]').onclick = () => { closeMenus(); $('inp').click(); };
 };
-$('mergeBtn').onclick = () => {
+$('mergeBtn').onclick = () => { pushHist();
   try {
     const fits = S.files.filter(f => !f.merged);
     const out = VF.merge(fits.map(f => f.bytes));
@@ -489,7 +503,7 @@ function renderSide() {
   if ($('trimTail')) $('trimTail').onclick = () => applyTrim(f, r.R[0].t, r.R[tail.a - 1].t);
   if (f.trim) $('gaps').innerHTML += `<div class="gapbox"><b>Тренировка обрезана</b><div class="mute">${hms(f.trim.t1 - f.trim.t0)} записи из ${hms(r.R[r.N - 1].t - r.R[0].t)}</div><button class="btn sm" id="untrim">Вернуть целиком</button></div>`;
   renderGapList(r);
-  if ($('untrim')) $('untrim').onclick = () => { f.trim = null; f.res = null; showCurrent(true); };
+  if ($('untrim')) $('untrim').onclick = () => { pushHist(); f.trim = null; f.res = null; showCurrent(true); };
   // power
   $('pwSec').style.display = st.hasP ? '' : 'none'; $('pwLeg').style.display = st.hasP ? '' : 'none';
   $('colorSeg').querySelector('[data-c=power]').disabled = !st.hasP;
@@ -523,6 +537,8 @@ $('helpClose').onclick = () => {
   if ($('setSensor').checked !== S.sensorFix) { S.sensorFix = $('setSensor').checked; store.set('sensorFix', S.sensorFix); for (const f of S.files) f.res = null; showCurrent(); return; }
   for (const f of S.files) if (f.res) f.stats = stats(f.res); renderSide();
 };
+$('cityBtn').onclick = () => { const L = []; for (let i = CI(55.56); i <= CI(55.92); i++) for (let j = CJ(37.35); j <= CJ(37.87); j++) L.push([i, j]);
+  $('helpModal').classList.remove('open'); toast(VF_I18N.tr('Скачиваю улицы Москвы в фоне — можно работать дальше'), 6000); loadCells(L, 'city'); };
 $('wipeBtn').onclick = async () => {
   if (!confirm(VF_I18N.tr('Стереть все данные программы на этом компьютере: настройки (пульс, FTP, вес), незаконченную работу, папку сохранения и схемы улиц?'))) return;
   try { for (let i = localStorage.length - 1; i >= 0; i--) { const k = localStorage.key(i); if (k && k.startsWith('velofix.')) localStorage.removeItem(k); } } catch (e) {}
@@ -750,10 +766,10 @@ PF.cv.addEventListener('pointermove', e => { if (!PF.map) return; const i = idxA
   setHover(i); });
 PF.cv.addEventListener('pointerup', () => { if (PF.drag && !PF.drag.moved) { S.sel = null; renderSegStat(); } else if (S.sel) M.fitRange(S.sel[0], S.sel[1]); PF.drag = null; });
 PF.cv.addEventListener('pointerleave', () => { if (!PF.drag) setHover(null); });
-function applyTrim(f, t0, t1) { f.trim = { t0, t1 }; f.res = null; S.sel = null; showCurrent(true); toast('Тренировка обрезана. «Вернуть целиком» — в блоке исправлений.'); }
+function applyTrim(f, t0, t1) { pushHist(); f.trim = { t0, t1 }; f.res = null; S.sel = null; showCurrent(true); toast('Тренировка обрезана. «Вернуть целиком» — в блоке исправлений.'); }
 let splitMode = false;
 $('splitBtn').onclick = () => { if (!cur() || !cur().res) return; splitMode = !splitMode; $('splitBtn').classList.toggle('p', splitMode); toast(splitMode ? 'Щёлкните по графику или по треку в месте, где разделить тренировку' : 'Разделение отменено'); };
-function doSplit(i) {
+function doSplit(i) { if (i != null) pushHist();
   splitMode = false; $('splitBtn').classList.remove('p');
   const f = cur(), r = f.res; if (i == null || i < 10 || i > r.N - 10) { toast('Выберите точку ближе к середине'); return; }
   const t = r.R[i].t, base = f.name.replace(/\.fit$/i, ''), t0 = f.trim ? f.trim.t0 : r.R[0].t, t1 = f.trim ? f.trim.t1 : r.R[r.N - 1].t;
@@ -766,10 +782,9 @@ function renderSegStat() {
   const el = $('segStat'), r = M.res;
   if (!S.sel || !r) { el.className = 'num mute'; el.innerHTML = r ? 'Выделите участок мышью — статистика отрезка' : ''; M.draw(); drawProfile(); return; }
   const s = segStats(r, S.sel[0], S.sel[1]);
-  el.className = 'num'; el.innerHTML = `<span class="mute">${fmt(s.from / 1000, 1)}–${fmt(s.to / 1000, 1)} км</span><b>${fmt(s.dist / 1000, 2)} км</b><b>${hms(s.mv)}</b><b>${fmt(s.avg, 1)} км/ч</b>${s.hr ? `<b style="color:var(--hr)">♥ ${Math.round(s.hr)}</b>` : ''}${s.p != null && cur().stats.hasP ? `<b style="color:var(--pw)">${Math.round(s.p)} Вт</b>` : ''}<b>+${Math.round(s.up)} м</b><button class="btn sm" id="segDraw" title="Перерисовать этот участок вручную">✎ Перерисовать</button><button class="btn sm" id="segKeep" title="Оставить в тренировке только этот отрезок">Оставить только его</button><button class="lnk" id="segX" title="Сбросить">✕</button>`;
+  el.className = 'num'; el.innerHTML = `<span class="mute">${fmt(s.from / 1000, 1)}–${fmt(s.to / 1000, 1)} км</span><b>${fmt(s.dist / 1000, 2)} км</b><b>${hms(s.mv)}</b><b>${fmt(s.avg, 1)} км/ч</b>${s.hr ? `<b style="color:var(--hr)">♥ ${Math.round(s.hr)}</b>` : ''}${s.p != null && cur().stats.hasP ? `<b style="color:var(--pw)">${Math.round(s.p)} Вт</b>` : ''}<b>+${Math.round(s.up)} м</b><button class="btn sm" id="segKeep" title="Оставить в тренировке только этот отрезок">Оставить только его</button><button class="lnk" id="segX" title="Сбросить">✕</button>`;
   $('segKeep').onclick = () => { const r2 = cur().res; applyTrim(cur(), r2.R[S.sel[0]].t, r2.R[S.sel[1]].t); };
   $('segX').onclick = () => { S.sel = null; renderSegStat(); };
-  $('segDraw').onclick = () => { const f = cur(), r2 = f.res; let [a, b] = S.sel; const e = (f.edits || []).find(x => x.type === 'route' && x.t0 === r2.R[a].t && x.t1 === r2.R[b].t); openEditor(f, a, b, e); };
   M.draw(); drawProfile();
 }
 
@@ -800,26 +815,51 @@ const outputs = f => { const enc = new TextEncoder(), b = baseName(f), r = f.res
 $('saveBtn').onclick = () => { const f = cur(); if (f && f.res) saveFile(...outputs(f).fit); };
 $('saveMenuBtn').onclick = () => {
   const m = $('saveMenu'); const fits = S.files.length;
-  m.innerHTML = `<div class="cap">Эта тренировка</div><button data-k="fit">FIT для Strava / Garmin</button><button data-k="gpx">GPX — трек для других сервисов</button><button data-k="tcx">TCX — для TrainingPeaks, Polar и др.</button><button data-k="png">PNG — картинка карты</button><button data-k="html">Отчёт «до и после» (.html)</button><button data-k="strava">Описание для Strava (скопировать)</button><button data-k="md">Отчёт об исправлениях (.md)</button><button data-k="csv">Таблица изменений (.csv)</button><button data-k="zip">Всё архивом (.zip)</button>
-    <div class="sepl"></div><div class="cap">Все тренировки</div><button data-k="all" ${fits < 2 ? 'disabled' : ''}>Сохранить все исправленные FIT (${fits})</button>
+  m.innerHTML = `<div class="cap">Эта тренировка</div><button data-k="fit">FIT для Strava / Garmin</button><button data-k="gpx">GPX — трек для других сервисов</button><button data-k="tcx">TCX — для TrainingPeaks, Polar и др.</button><button data-k="png">PNG — картинка карты</button><button data-k="ba">PNG — «до и после» рядом</button><button data-k="html">Отчёт «до и после» (.html)</button><button data-k="strava">Описание для Strava (скопировать)</button><button data-k="md">Отчёт об исправлениях (.md)</button><button data-k="csv">Таблица изменений (.csv)</button><button data-k="zip">Всё архивом (.zip)</button>
+    <div class="sepl"></div><div class="cap">Все тренировки</div><button data-k="batch">Исправить целую папку с FIT…</button><button data-k="all" ${fits < 2 ? 'disabled' : ''}>Сохранить все исправленные FIT (${fits})</button>
     <div class="sepl"></div><div class="cap">Куда сохранять</div>${canPick ? `<button data-k="dir">${dirHandle ? 'Папка: ' + esc(dirHandle.name) + ' — изменить' : 'Выбрать постоянную папку…'}</button>${dirHandle ? '<button data-k="ask">Спрашивать каждый раз</button>' : ''}` : '<button disabled>В «Загрузки» (выбор папки недоступен)</button>'}`;
   openMenu(m, $('saveMenuBtn'), true);
   m.querySelectorAll('button[data-k]').forEach(b => b.onclick = async () => { closeMenus(); const k = b.dataset.k, f = cur();
     if (k === 'png') return exportPng();
+    if (k === 'ba') return exportBA();
     if (k === 'html') return exportReport();
     if (k === 'strava') return copyStrava(f);
     if (k === 'dir') return pickDir(); if (k === 'ask') return forgetDir();
     if (k === 'all') return saveAll();
+    if (k === 'batch') return batchFolder();
     const o = outputs(f);
     if (k === 'zip') { // everything: FIT, GPX, TCX, reports, map picture, Strava description
       toast(VF_I18N.tr('Собираю архив…'), 20000);
       const files = Object.values(o).map(([n, d]) => ({ name: n, data: d })), b = baseName(f);
       try { const h = await exportReport(true); if (h) files.push({ name: b + '_REPORT.html', data: h }); } catch (e) {}
       try { const png = await exportPng(true); if (png) files.push({ name: b + '_map.png', data: new Uint8Array(await png.arrayBuffer()) }); } catch (e) {}
+      try { const ba = await exportBA(true); if (ba) files.push({ name: b + '_before_after.png', data: new Uint8Array(await ba.arrayBuffer()) }); } catch (e) {}
       files.push({ name: b + '_STRAVA.txt', data: new TextEncoder().encode('\ufeff' + stravaText(f)) });
       return saveFile(b + '_RESTORED.zip', VF.zip(files), 'application/zip'); }
     saveFile(...o[k]); });
 };
+// ---- batch: every .fit in a folder → VELO_FIX subfolder with fixed files + summary table
+async function batchFolder() {
+  const en = VF_I18N.lang === 'en';
+  if (!canPick) { toast(en ? 'Folder access is not available here — open several files with “+” instead' : 'Выбор папки здесь недоступен — откройте несколько файлов через «＋» и нажмите «Сохранить все»', 7000); return; }
+  let dir; try { dir = await showDirectoryPicker({ id: 'velofix-batch', mode: 'readwrite' }); } catch (e) { return; }
+  const fits = [], gpx = []; for await (const [name, h] of dir.entries()) { if (h.kind !== 'file') continue; if (/\.fit$/i.test(name) && !/_RESTORED\.fit$/i.test(name)) fits.push(h); else if (/\.gpx$/i.test(name)) gpx.push(h); }
+  if (!fits.length) { toast(en ? 'No .fit files in this folder' : 'В этой папке нет файлов .fit'); return; }
+  const refs = []; for (const h of gpx) { try { refs.push(VF.parseGpx(await (await h.getFile()).text(), h.name)); } catch (e) {} }
+  const out = await dir.getDirectoryHandle('VELO_FIX', { create: true });
+  const rows = [['file', en ? 'km before' : 'км до', en ? 'km after' : 'км после', en ? 'max before' : 'макс. до', en ? 'max after' : 'макс. после', en ? 'fixes' : 'исправлений', en ? 'GPS gaps left' : 'пропусков GPS', en ? 'result' : 'итог'].join(';')];
+  let ok = 0;
+  for (let k = 0; k < fits.length; k++) { const h = fits[k];
+    toast(`${en ? 'Fixing' : 'Исправляю'} ${k + 1}/${fits.length}: ${h.name}`, 60000);
+    try { const bytes = new Uint8Array(await (await h.getFile()).arrayBuffer()); const r = VF.run(bytes, refs, { fillStraight: S.straight, sensorFix: S.sensorFix });
+      const fh = await out.getFileHandle(h.name.replace(/\.fit$/i, '') + '_RESTORED.fit', { create: true }); const w = await fh.createWritable(); await w.write(r.out); await w.close();
+      const nfix = r.phantomBlocks.length + r.jumps.length + (Object.keys(r.badReason).length ? 1 : 0) + r.dups.length + r.sensorFix.hr.length + r.sensorFix.pwr.length;
+      const gaps = r.unfilled.filter(u => u.n > 15).length;
+      rows.push([h.name, fmt(r.before.dist / 1000, 2), fmt(r.after.dist / 1000, 2), fmt(r.before.max, 1), fmt(r.after.max, 1), nfix, gaps, nfix ? (en ? 'fixed' : 'исправлено') : (en ? 'OK' : 'в порядке')].join(';')); ok++;
+    } catch (e) { rows.push([h.name, '', '', '', '', '', '', (en ? 'error: ' : 'ошибка: ') + VF_I18N.tr(e.message || String(e))].join(';')); } }
+  try { const sh = await out.getFileHandle(en ? 'summary.csv' : 'сводка.csv', { create: true }); const w = await sh.createWritable(); await w.write('\ufeff' + rows.join('\r\n')); await w.close(); } catch (e) {}
+  toast(en ? `Done: ${ok} of ${fits.length} files → folder VELO_FIX (summary.csv inside)` : `Готово: ${ok} из ${fits.length} файлов → папка VELO_FIX внутри выбранной (там же сводка.csv)`, 9000);
+}
 async function saveAll() {
   for (const f of S.files) process(f);
   const ok = S.files.filter(f => f.res);
@@ -922,16 +962,38 @@ if (IS_APP) { const poll = async () => { try { const j = await (await api('/api/
 // ================= before / after report =================
 async function mapImage(r, view, W, H) {
   const keep = M.view; M.view = view;
-  const bb = M.bounds(0, r.N - 1, true); if (!bb) { M.view = keep; return null; }
-  const v = Object.assign({ w: W, h: H }, M.fitBox(bb, W, H, 30));
+  const bb = M.measuredBounds() || M.bounds(0, r.N - 1, false); if (!bb) { M.view = keep; return null; }
+  const v0 = M.fitBox(bb, W, H, 30), tw = wx(bb.e, v0.z) - wx(bb.w, v0.z), th = wy(bb.s, v0.z) - wy(bb.n, v0.z);
+  const k = Math.max(1, Math.min(1.95, (W - 60) / Math.max(tw, 1), (H - 60) / Math.max(th, 1)));
+  const v = Object.assign({ w: W / k, h: H / k }, v0);
   const cv = document.createElement('canvas'); cv.width = W * 2; cv.height = H * 2; const ctx = cv.getContext('2d');
   if (S.tiles !== 'none') await new Promise(res => { let left = 0, done = false; const fin = () => { if (!done) { done = true; res(); } }; const n = 2 ** v.z;
     for (let x = Math.floor((v.cx - W / 2) / TILE); x <= Math.floor((v.cx + W / 2) / TILE); x++) for (let y = Math.floor((v.cy - H / 2) / TILE); y <= Math.floor((v.cy + H / 2) / TILE); y++) {
       if (y < 0 || y >= n) continue; const im = M.tile(S.tiles, v.z, ((x % n) + n) % n, y, () => { if (--left <= 0) fin(); }); if (!im.ok && !im.bad) left++; }
     if (left <= 0) fin(); setTimeout(fin, 5000); });
-  M.paint(ctx, v, { scale: 2, clean: true }); let url = null;
-  try { url = cv.toDataURL('image/png'); } catch (e) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cv.width, cv.height); M.paint(ctx, v, { scale: 2, clean: true, noTiles: true }); url = cv.toDataURL('image/png'); }
+  M.paint(ctx, v, { scale: 2 * k, clean: true }); let url = null;
+  try { url = cv.toDataURL('image/png'); } catch (e) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cv.width, cv.height); M.paint(ctx, v, { scale: 2 * k, clean: true, noTiles: true }); url = cv.toDataURL('image/png'); }
   M.view = keep; M.draw(); return url;
+}
+async function exportBA(only) {
+  const f = cur(), r = f && f.res; if (!r) return; const en = VF_I18N.lang === 'en';
+  toast(en ? 'Drawing the picture…' : 'Рисую картинку…', 15000);
+  const W = 1600, H = 900, mw = 760, mh = 600;
+  const [ib, ia] = [await mapImage(r, 'before', mw, mh), await mapImage(r, 'after', mw, mh)];
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#f5f6f8'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#fc4c02'; ctx.fillRect(0, 0, W, 8);
+  ctx.fillStyle = '#14171c'; ctx.font = '700 34px "Segoe UI",sans-serif'; ctx.fillText(VF_I18N.tr(rideTitle(r)), 40, 64);
+  const load = src => new Promise(res => { if (!src) return res(null); const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });
+  const [b1, a1] = [await load(ib), await load(ia)], b = r.before, a = r.after;
+  [[b1, en ? 'Before' : 'До', b, '#dc2626', 40], [a1, en ? 'After' : 'После', a, '#059669', 800]].forEach(([im, t, s, col, x]) => {
+    ctx.fillStyle = '#fff'; ctx.fillRect(x, 96, mw, mh + 150); if (im) ctx.drawImage(im, x, 166, mw, mh);
+    ctx.fillStyle = col; ctx.font = '700 26px "Segoe UI",sans-serif'; ctx.fillText(t, x + 20, 136);
+    ctx.fillStyle = '#14171c'; ctx.font = '600 24px "Segoe UI",sans-serif';
+    ctx.fillText(`${fmt(s.dist / 1000, 2)} ${en ? 'km' : 'км'}   ·   ${en ? 'avg' : 'ср.'} ${fmt(s.avg, 1)}   ·   ${en ? 'max' : 'макс.'} ${fmt(s.max, 1)} ${en ? 'km/h' : 'км/ч'}   ·   ${hms(s.timer)}`, x + 20, 166 + mh + 50);
+  });
+  ctx.fillStyle = '#8b93a1'; ctx.font = '500 16px "Segoe UI",sans-serif'; ctx.textAlign = 'right'; ctx.fillText('VELO FIX' + (S.tiles !== 'none' ? ' · ' + tileAttr(S.tiles) : ''), W - 40, 64); ctx.textAlign = 'left';
+  const blob = await new Promise(res => cv.toBlob(res, 'image/png'));
+  $('toast').style.display = 'none'; if (only) return blob; saveFile(baseName(f) + '_before_after.png', blob, 'image/png');
 }
 function stravaText(f) {
   const r = f.res, b = r.before, a = r.after, en = VF_I18N.lang === 'en', parts = [];
@@ -1033,41 +1095,104 @@ function magnet(x, y) {
   return [x + sx / c - R, y + sy / c - R];
 }
 // ================= local road map (works without VPN) =================
-// Road geometry of the area is downloaded once from OpenStreetMap (Overpass; a Russian mirror first), kept in IndexedDB,
+// Road geometry is downloaded once as OpenFreeMap vector tiles (OpenStreetMap data, works without VPN), kept in IndexedDB,
 // and routing / snapping / map matching are computed right here — no routing server needed.
 const OVERPASS = ['https://maps.mail.ru/osm/tools/overpass/api/interpreter', 'https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
-const CELL_LAT = 0.015, CELL_LON = 0.025;
+const CI = lat => -tileY(lat), CJ = lon => tileX(lon); // cells = z14 tiles (~1 km)
 const HW = 'primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|unclassified|residential|living_street|service|pedestrian|footway|cycleway|path|track|road|steps|bridleway|trunk|trunk_link';
 const ROADS = { cells: new Map(), loading: new Map(), nodes: new Map(), status: '' };
-const cellKey = (i, j) => `roads1:${i}:${j}`;
+const cellKey = (i, j) => `roads3:${i}:${j}`;
 const CELL_SLOTS = { busy: 0, q: [] };
-const cellSlot = () => new Promise(res => { if (CELL_SLOTS.busy < 3) { CELL_SLOTS.busy++; res(); } else CELL_SLOTS.q.push(res); });
+const cellSlot = () => new Promise(res => { if (CELL_SLOTS.busy < 6) { CELL_SLOTS.busy++; res(); } else CELL_SLOTS.q.push(res); });
 const cellFree = () => { const n = CELL_SLOTS.q.shift(); if (n) n(); else CELL_SLOTS.busy--; };
 async function fetchCell(i, j) { await cellSlot(); try { return await fetchCell0(i, j); } finally { cellFree(); } }
+// street graph source: OpenFreeMap vector tiles (z14, OpenMapTiles «transportation» layer) — fast, no VPN needed, CORS open
+const TZ = 14, TEXT = 4096;
+let OFM_TPL = null;
+async function ofmTemplate() {
+  if (OFM_TPL) return OFM_TPL;
+  const j = await withTimeout(15000, sg => fetch('https://tiles.openfreemap.org/planet', { signal: sg })).then(r => r.json());
+  return (OFM_TPL = j.tiles[0]);
+}
+// minimal protobuf / MVT reader
+function pbf(buf) { let p = 0; const v = () => { let r = 0, m = 1, b; do { b = buf[p++]; r += (b & 127) * m; m *= 128; } while (b & 128); return r; };
+  return { end: () => p >= buf.length, tag: () => { const t = v(); return [t >>> 3, t & 7]; }, v, sub: () => { const n = v(), s = buf.subarray(p, p + n); p += n; return s; },
+    skip: w => { if (w === 0) v(); else if (w === 1) p += 8; else if (w === 2) p += v(); else if (w === 5) p += 4; }, f32: () => { const d = new DataView(buf.buffer, buf.byteOffset + p, 4).getFloat32(0, true); p += 4; return d; }, f64: () => { const d = new DataView(buf.buffer, buf.byteOffset + p, 8).getFloat64(0, true); p += 8; return d; } }; }
+const zz = n => (n % 2 ? -(n + 1) / 2 : n / 2);
+function mvtLines(buf, want) {
+  const out = [], T = pbf(buf);
+  while (!T.end()) { const [f, w] = T.tag(); if (f !== 3) { T.skip(w); continue; }
+    const L = pbf(T.sub()); let name = '', keys = [], vals = [], feats = [], ext = 4096;
+    while (!L.end()) { const [lf, lw] = L.tag();
+      if (lf === 1) name = new TextDecoder().decode(L.sub()); else if (lf === 2) feats.push(L.sub()); else if (lf === 3) keys.push(new TextDecoder().decode(L.sub()));
+      else if (lf === 4) { const V = pbf(L.sub()); let val = null; while (!V.end()) { const [vf, vw] = V.tag(); if (vf === 1) val = new TextDecoder().decode(V.sub()); else if (vf === 2) val = V.f32(); else if (vf === 3) val = V.f64(); else if (vf === 4 || vf === 5) val = V.v(); else if (vf === 6) val = zz(V.v()); else if (vf === 7) val = !!V.v(); else V.skip(vw); } vals.push(val); }
+      else if (lf === 5) ext = L.v(); else L.skip(lw); }
+    if (name !== want) continue;
+    for (const fb of feats) { const F = pbf(fb); let tags = [], type = 0, geom = [];
+      while (!F.end()) { const [ff, fw] = F.tag(); if (ff === 2) { const S = pbf(F.sub()); while (!S.end()) tags.push(S.v()); } else if (ff === 3) type = F.v(); else if (ff === 4) { const S = pbf(F.sub()); while (!S.end()) geom.push(S.v()); } else F.skip(fw); }
+      if (type !== 2) continue; const props = {}; for (let k = 0; k < tags.length; k += 2) props[keys[tags[k]]] = vals[tags[k + 1]];
+      const lines = []; let x = 0, y = 0, cur = null;
+      for (let k = 0; k < geom.length;) { const c = geom[k++], cmd = c & 7, cnt = c >> 3;
+        for (let r = 0; r < cnt; r++) { if (cmd === 7) continue; x += zz(geom[k++]); y += zz(geom[k++]); if (cmd === 1) { cur = [[x * TEXT / ext, y * TEXT / ext]]; lines.push(cur); } else cur.push([x * TEXT / ext, y * TEXT / ext]); } }
+      out.push({ props, lines }); } }
+  return out;
+}
+const tileX = lon => Math.floor((lon + 180) / 360 * (1 << TZ));
+const tileY = lat => { const r = lat * Math.PI / 180; return Math.floor((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * (1 << TZ)); };
+const gLon = gx => gx / (TEXT << TZ) * 360 - 180;
+const gLat = gy => { const n = Math.PI - 2 * Math.PI * gy / (TEXT << TZ); return 180 / Math.PI * Math.atan(Math.sinh(n)); };
+const CLS = { trunk: 'trunk', primary: 'primary', secondary: 'secondary', tertiary: 'tertiary', minor: 'residential', service: 'service', track: 'track' };
+const PATHS = /^(footway|cycleway|path|pedestrian|steps|bridleway|living_street)$/;
 async function fetchCell0(i, j) {
-  const s = i * CELL_LAT, w = j * CELL_LON, q = `[out:json][timeout:60];way["highway"~"^(${HW})$"](${s.toFixed(4)},${w.toFixed(4)},${(s + CELL_LAT).toFixed(4)},${(w + CELL_LON).toFixed(4)});out body geom qt;`;
-  // ask all mirrors at once and take the first good answer (the Russian mirror is often slow, the others may be blocked)
-  const one = async ep => {
-    let r = await withTimeout(40000, sg => fetch(ep, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: sg })).catch(() => null);
-    if ((!r || !r.ok) && IS_APP) r = await withTimeout(45000, sg => api('/api/overpass?ep=' + encodeURIComponent(ep), { method: 'POST', body: q, signal: sg })).catch(() => null);
-    if (!r || !r.ok) throw 0; const j2 = await r.json(); if (!j2.elements) throw 0;
-    return j2.elements.filter(e => e.type === 'way' && e.geometry && e.nodes).map(e => ({ n: e.nodes, g: e.geometry.map(p => [Math.round(p.lat * 1e6) / 1e6, Math.round(p.lon * 1e6) / 1e6]), h: e.tags.highway, o: e.tags.oneway === 'yes' || e.tags.oneway === '1' ? 1 : e.tags.oneway === '-1' ? -1 : (e.tags.junction === 'roundabout' ? 1 : 0), b: e.tags['oneway:bicycle'] === 'no' ? 2 : 0 }));
-  };
-  for (let round = 0; round < 2; round++) { try { return await Promise.any(OVERPASS.map(one)); } catch (e) {} }
-  return null;
+  const tx = j, ty = -i;
+  for (let round = 0; round < 3; round++) {
+    try {
+      const tpl = await ofmTemplate(), u = tpl.replace('{z}', TZ).replace('{x}', tx).replace('{y}', ty);
+      const r = await withTimeout(20000, sg => fetch(u, { signal: sg })); if (r.status === 204 || r.status === 404) return [];
+      if (!r.ok) throw 0;
+      const feats = mvtLines(new Uint8Array(await r.arrayBuffer()), 'transportation'), ways = [];
+      const X0 = tx * TEXT, Y0 = ty * TEXT, Q = 3; // vertices closer than ~1 m are the same node
+      const nid = (gx, gy) => Math.round(gx / Q) * 3e7 + Math.round(gy / Q);
+      for (const { props, lines } of feats) {
+        const c = props.class, sc = props.subclass; let h = CLS[c];
+        if (c === 'path') h = PATHS.test(sc) ? sc : 'path'; if (c === 'minor' && sc === 'living_street') h = 'living_street';
+        if (!h || sc === 'platform' || props.brunnel === 'ferry') continue;
+        const o = props.oneway === 1 ? 1 : props.oneway === -1 ? -1 : 0, br = props.brunnel === 'tunnel' ? 1 : props.brunnel === 'bridge' ? 2 : 0;
+        for (const ln of lines) {
+          // keep only the part inside this tile (clipped at the exact tile edge so neighbours join)
+          let cur = null; const push = (gx, gy) => { const id = nid(gx, gy); if (cur.n[cur.n.length - 1] === id) return; cur.n.push(id); cur.g.push([Math.round(gLat(Math.round(gy / Q) * Q) * 1e6) / 1e6, Math.round(gLon(Math.round(gx / Q) * Q) * 1e6) / 1e6]); };
+          const inT = (x, y) => x >= 0 && x <= TEXT && y >= 0 && y <= TEXT;
+          for (let k = 1; k < ln.length; k++) {
+            let [x1, y1] = ln[k - 1], [x2, y2] = ln[k];
+            // Liang–Barsky clip, computed in a direction-independent way
+            const sw = x1 > x2 || (x1 === x2 && y1 > y2); if (sw) [x1, y1, x2, y2] = [x2, y2, x1, y1];
+            let t0 = 0, t1 = 1; const dx = x2 - x1, dy = y2 - y1, P = [-dx, dx, -dy, dy], Qv = [x1, TEXT - x1, y1, TEXT - y1]; let out2 = false;
+            for (let m = 0; m < 4; m++) { if (P[m] === 0) { if (Qv[m] < 0) out2 = true; continue; } const t = Qv[m] / P[m]; if (P[m] < 0) t0 = Math.max(t0, t); else t1 = Math.min(t1, t); }
+            if (out2 || t0 > t1) { cur = null; continue; }
+            let a = [x1 + t0 * dx, y1 + t0 * dy], b = [x1 + t1 * dx, y1 + t1 * dy]; if (sw) [a, b] = [b, a];
+            if (!cur || !inT(ln[k - 1][0], ln[k - 1][1])) { if (cur && cur.n.length > 1) ways.push(cur); cur = { n: [], g: [], h, o, b: 0, br }; push(X0 + a[0], Y0 + a[1]); }
+            push(X0 + b[0], Y0 + b[1]);
+            if (!inT(ln[k][0], ln[k][1])) { if (cur.n.length > 1) ways.push(cur); cur = null; }
+          }
+          if (cur && cur.n.length > 1) ways.push(cur);
+        }
+      }
+      return ways;
+    } catch (e) { OFM_TPL = round ? null : OFM_TPL; }
+  }
   return null;
 }
 function addWays(ways) {
   for (const w of ways) for (let k = 0; k < w.n.length; k++) {
     const id = w.n[k]; let nd = ROADS.nodes.get(id); if (!nd) { nd = { id, lat: w.g[k][0], lon: w.g[k][1], adj: [] }; ROADS.nodes.set(id, nd); }
     if (k) { const p = ROADS.nodes.get(w.n[k - 1]), L = VF.hav(p.lat, p.lon, nd.lat, nd.lon);
-      if (!p.adj.some(e => e.to === id)) p.adj.push({ to: id, L, h: w.h, dir: w.o === -1 ? -1 : 0, ow: w.o, fw: true });
-      if (!nd.adj.some(e => e.to === p.id)) nd.adj.push({ to: p.id, L, h: w.h, ow: w.o, fw: false, bk: w.b }); }
+      if (!p.adj.some(e => e.to === id)) p.adj.push({ to: id, L, h: w.h, dir: w.o === -1 ? -1 : 0, ow: w.o, fw: true, br: w.br || 0 });
+      if (!nd.adj.some(e => e.to === p.id)) nd.adj.push({ to: p.id, L, h: w.h, ow: w.o, fw: false, bk: w.b, br: w.br || 0 }); }
   }
 }
 async function ensureCells(s, w, n, e, onProg) {
-  const keys = []; for (let i = Math.floor(s / CELL_LAT); i <= Math.floor(n / CELL_LAT); i++) for (let j = Math.floor(w / CELL_LON); j <= Math.floor(e / CELL_LON); j++) keys.push([i, j]);
-  if (keys.length > 40) return false;
+  const keys = []; for (let i = CI(s); i <= CI(n); i++) for (let j = CJ(w); j <= CJ(e); j++) keys.push([i, j]);
+  if (keys.length > 600) return false;
   let done = 0, ok = true;
   await Promise.all(keys.map(async ([i, j]) => {
     const k = cellKey(i, j);
@@ -1095,7 +1220,7 @@ function nearestEdge(lat, lon, maxD = 120) {
   const k = Math.cos(lat * Math.PI / 180), X = p => [(p.lon - lon) * 111320 * k, (p.lat - lat) * 110540];
   let best = null;
   for (const a of ROADS.nodes.values()) {
-    if (Math.abs(a.lat - lat) > 0.004 || Math.abs(a.lon - lon) > 0.006) continue;
+    if (Math.abs(a.lat - lat) > 0.008 || Math.abs(a.lon - lon) > 0.012) continue;
     const [ax, ay] = X(a);
     for (const e of a.adj) { if (e.to < a.id) continue; const b = ROADS.nodes.get(e.to), [bx, by] = X(b), dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy;
       const u = L2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / L2)) : 0, d = Math.hypot(ax + u * dx, ay + u * dy);
@@ -1126,10 +1251,89 @@ function astar(p, q, mode) {
   const path = []; let c = prev.get(GOAL); while (c !== START && c != null) { const nd = ROADS.nodes.get(c); path.push({ lat: nd.lat, lon: nd.lon }); c = prev.get(c); }
   path.reverse(); return [p, { lat: sa.lat, lon: sa.lon }, ...path, { lat: sb.lat, lon: sb.lon }, q];
 }
+// vector tiles merge streets into long lines and drop many junction points: a side street ends a few metres
+// from the street it joins, and crossing streets share no point. Rebuild those junctions geometrically.
+let HEAL_ID = 5e15; // above every tile node id, below 2^53
+function healRoads(s, w, n, e) {
+  const G = 0.0003, gk = (i, j) => i + ':' + j, grid = new Map();
+  const inB = nd => nd.lat >= s - 0.003 && nd.lat <= n + 0.003 && nd.lon >= w - 0.005 && nd.lon <= e + 0.005;
+  const cellsOf = (a, b) => { const out = new Set(), i0 = Math.floor(Math.min(a.lat, b.lat) / G), i1 = Math.floor(Math.max(a.lat, b.lat) / G), j0 = Math.floor(Math.min(a.lon, b.lon) / G), j1 = Math.floor(Math.max(a.lon, b.lon) / G);
+    for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) out.add(gk(i, j)); return out; };
+  const add = (a, b) => { const seg = [a, b]; for (const k of cellsOf(a, b)) { let L = grid.get(k); if (!L) grid.set(k, L = []); L.push(seg); } };
+  const fresh = [];
+  for (const a of ROADS.nodes.values()) { if (!inB(a)) continue; if (!a.hl) fresh.push(a); for (const ed of a.adj) if (ed.to > a.id && !ed.hx) add(a, ROADS.nodes.get(ed.to)); }
+  const live = (a, b) => a.adj.some(x => x.to === b.id && !x.hx);
+  const kx = Math.cos((s + n) / 2 * Math.PI / 180) * 111320, ky = 110540;
+  // split edge a–b at fraction u (0..1); returns the node at that place
+  const split = (a, b, u) => {
+    if (u < 0.02 || VF.hav(a.lat, a.lon, a.lat + u * (b.lat - a.lat), a.lon + u * (b.lon - a.lon)) < 1.5) return a;
+    if (u > 0.98 || VF.hav(b.lat, b.lon, a.lat + u * (b.lat - a.lat), a.lon + u * (b.lon - a.lon)) < 1.5) return b;
+    const m = { id: HEAL_ID++, lat: a.lat + u * (b.lat - a.lat), lon: a.lon + u * (b.lon - a.lon), adj: [], hl: true }; ROADS.nodes.set(m.id, m);
+    const e1 = a.adj.find(x => x.to === b.id), e2 = b.adj.find(x => x.to === a.id), L = e1.L;
+    m.adj.push(Object.assign({}, e1, { to: b.id, L: L * (1 - u) })); e1.to = m.id; e1.L = L * u;
+    if (e2) { m.adj.push(Object.assign({}, e2, { to: a.id, L: L * u })); e2.to = m.id; e2.L = L * (1 - u); }
+    add(a, m); add(m, b); return m;
+  };
+  const link = (p, q, d) => { if (p === q || p.adj.some(x => x.to === q.id)) return; p.adj.push({ to: q.id, L: d, h: 'path', ow: 0, fw: true }); q.adj.push({ to: p.id, L: d, h: 'path', ow: 0, fw: false }); };
+  const near = (lat, lon) => { const i = Math.floor(lat / G), j = Math.floor(lon / G), out = new Set(); for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) for (const sg of grid.get(gk(i + di, j + dj)) || []) out.add(sg); return out; };
+  // 1) crossings: two segments that cross get a common node (not tunnels/bridges against ground streets)
+  for (const a of fresh) for (const ea of a.adj) {
+    if (ea.hx) continue; const b = ROADS.nodes.get(ea.to); if (!live(a, b)) continue;
+    const cand = new Set(); for (const k of cellsOf(a, b)) for (const sg of grid.get(k) || []) cand.add(sg);
+    for (const [c, d] of cand) {
+      if (c === a || c === b || d === a || d === b || !live(c, d) || !live(a, b)) continue;
+      const ec = c.adj.find(x => x.to === d.id); if ((ec.br || 0) !== (ea.br || 0)) continue;
+      const ax = a.lon * kx, ay = a.lat * ky, bx = b.lon * kx, by = b.lat * ky, cx = c.lon * kx, cy = c.lat * ky, dx = d.lon * kx, dy = d.lat * ky;
+      const den = (bx - ax) * (dy - cy) - (by - ay) * (dx - cx); if (Math.abs(den) < 1e-9) continue;
+      const t = ((cx - ax) * (dy - cy) - (cy - ay) * (dx - cx)) / den, u = ((cx - ax) * (by - ay) - (cy - ay) * (bx - ax)) / den;
+      if (t <= 0 || t >= 1 || u <= 0 || u >= 1) continue;
+      const m1 = split(a, b, t), m2 = split(c, d, u); link(m1, m2, VF.hav(m1.lat, m1.lon, m2.lat, m2.lon));
+      break; // edge a–b changed; remaining crossings of it are found when its new halves are visited
+    }
+  }
+  // 2) loose ends: a street end close to another street joins it
+  for (const nd of fresh) {
+    nd.hl = true; if (new Set(nd.adj.map(x => x.to)).size !== 1) continue;
+    const own = nd.adj[0].to, X = p => [(p.lon - nd.lon) * kx, (p.lat - nd.lat) * ky]; let best = null;
+    for (const [a, b] of near(nd.lat, nd.lon)) {
+      if (a === nd || b === nd || (a.id === own && b.id === own) || !live(a, b)) continue;
+      if (a.id === own || b.id === own) continue;
+      const [ax, ay] = X(a), [bx, by] = X(b), dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy;
+      const u = L2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / L2)) : 0, d = Math.hypot(ax + u * dx, ay + u * dy);
+      if (d <= 10 && (!best || d < best.d)) best = { d, a, b, u };
+    }
+    if (best) { const m = split(best.a, best.b, best.u); link(nd, m, best.d); }
+  }
+}
 async function localRoute(a, b, mode) {
   const s = Math.min(a.lat, b.lat) - 0.006, n = Math.max(a.lat, b.lat) + 0.006, w = Math.min(a.lon, b.lon) - 0.01, e = Math.max(a.lon, b.lon) + 0.01;
   if (!(await ensureCells(s, w, n, e, roadsProgress))) return null;
+  healRoads(s, w, n, e);
   return astar(a, b, mode === 'rules' ? 'rules' : 'free');
+}
+// load street map in advance: along the whole ride as soon as it is opened (cached forever), or a whole city on request
+const PREF = { done: new Set() };
+function prefetchRide(r) {
+  if (!r || PREF.done.has(r.R[0].t)) return; PREF.done.add(r.R[0].t);
+  const cells = new Map();
+  for (let i = 0; i < r.N; i += 5) { const p = r.newLL[i].lat != null ? r.newLL[i] : (r.R[i].lat != null ? r.R[i] : null); if (!p) continue;
+    const ci = CI(p.lat), cj = CJ(p.lon); cells.set(ci + ':' + cj, [ci, cj]); }
+  // gaps: also the straight corridor between their ends
+  for (const g of r.unfilled.concat(r.runs)) { const A = r.R[g.a - 1] || r.R[g.a], B = r.R[g.b + 1] || r.R[g.b]; const a = A && A.lat != null ? A : r.newLL[g.a], b = B && B.lat != null ? B : r.newLL[g.b];
+    if (!a || !b || a.lat == null || b.lat == null) continue; for (let u = 0; u <= 1; u += 0.05) { const la = a.lat + (b.lat - a.lat) * u, lo = a.lon + (b.lon - a.lon) * u; const ci = CI(la), cj = CJ(lo); cells.set(ci + ':' + cj, [ci, cj]); } }
+  loadCells([...cells.values()], 'ride');
+}
+async function loadCells(list, why) {
+  let done = 0; const tot = list.length;
+  const st = () => { const el = $('roadsState'); if (el) el.textContent = done < tot ? VF_I18N.tr('Схема улиц') + `: ${done}/${tot}` : VF_I18N.tr('Схема улиц готова'); };
+  st();
+  await Promise.all(list.map(async ([i, j]) => { const k = cellKey(i, j);
+    if (!ROADS.cells.has(k)) { if (!ROADS.loading.has(k)) ROADS.loading.set(k, (async () => { let ways = null; try { ways = await idb('readonly', st2 => st2.get(k)); } catch (x) {}
+        if (!ways) { ways = await fetchCell(i, j); if (ways) try { await idb('readwrite', st2 => st2.put(ways, k)); } catch (x) {} }
+        if (ways) { addWays(ways); ROADS.cells.set(k, true); } ROADS.loading.delete(k); return !!ways; })());
+      await ROADS.loading.get(k); }
+    done++; st(); }));
+  if (why === 'city') toast(VF_I18N.tr('Схема улиц загружена — теперь прокладка работает сразу, даже без интернета'), 7000);
 }
 function roadsProgress(d, t) { ROADS.status = d < t ? `дороги ${d}/${t}` : ''; const el = $('edRoads'); if (el) { el.textContent = d < t ? VF_I18N.tr('Загружаю карту дорог…') + ` ${d}/${t}` : ''; el.style.display = d < t ? 'block' : 'none'; } }
 async function routeLeg(a, b, mode) {
@@ -1138,9 +1342,11 @@ async function routeLeg(a, b, mode) {
   if (routeCache.has(k)) return routeCache.get(k);
   if (mode !== 'line') {
     const job = localRoute(a, b, mode).catch(() => null);
-    const loc = await Promise.race([job, new Promise(r => setTimeout(() => r('slow'), 2500))]);
-    if (loc === 'slow') { job.then(p => { if (p && p.length >= 2) { routeCache.set(k, p); if ($('ed').classList.contains('open')) { ED.legKey = []; edRoute(); } } }); return [a, b]; }
+    // wait for the street map instead of drawing a straight placeholder; the leg shows as «loading» meanwhile
+    const loc = await Promise.race([job, new Promise(r => setTimeout(() => r(null), 90000))]);
     if (loc && loc.length >= 2) { routeCache.set(k, loc); return loc; }
+    if (!ROADS.warned) { ROADS.warned = true; toast(VF_I18N.tr('Не удалось загрузить схему улиц — участок нарисован прямой линией. Проверьте интернет и нажмите «Отменить», затем поставьте точку снова.'), 8000); }
+    return [a, b];
   }
   const ll = `${a.lon.toFixed(6)},${a.lat.toFixed(6)};${b.lon.toFixed(6)},${b.lat.toFixed(6)}`;
   let pts = null;
@@ -1170,7 +1376,7 @@ function edFit() {
   if (!pts.length) { const p = r.newLL[ED.A].lat != null ? r.newLL[ED.A] : r.newLL[ED.B]; if (p && p.lat != null) pts.push(p); }
   if (!pts.length) return; let s = 90, n = -90, w = 180, e = -180; for (const p of pts) { s = Math.min(s, p.lat); n = Math.max(n, p.lat); w = Math.min(w, p.lon); e = Math.max(e, p.lon); }
   if (n - s < 0.004) { s -= 0.002; n += 0.002; } if (e - w < 0.006) { w -= 0.003; e += 0.003; }
-  const fb = M.fitBox({ s, n, w, e }, ED.w, ED.h, 120), z = Math.max(13, Math.min(fb.z, 17));
+  const fb = M.fitBox({ s, n, w, e }, ED.w, ED.h, 120), z = Math.min(fb.z, 17);
   ED.z = z; ED.cx = (wx(w, z) + wx(e, z)) / 2; ED.cy = (wy(s, z) + wy(n, z)) / 2; edDraw();
 }
 function edPaint() {
@@ -1187,7 +1393,7 @@ function edPaint() {
   ctx.strokeStyle = isDark() ? 'rgba(0,0,0,.6)' : 'rgba(255,255,255,.95)'; ctx.lineWidth = 8; ctx.beginPath();
   ED.legs.forEach(g => { if (!g) return; g.forEach((p, k) => { const q = edScr(p.lat, p.lon); k ? ctx.lineTo(...q) : ctx.moveTo(...q); }); }); ctx.stroke();
   ED.legs.forEach((g, i) => { const a = ED.wp[i], b = ED.wp[i + 1]; if (!a || !b) return; ctx.beginPath();
-    if (!g) { ctx.setLineDash([3, 6]); ctx.strokeStyle = cssv('--acc'); ctx.lineWidth = 3; ctx.moveTo(...edScr(a.lat, a.lon)); ctx.lineTo(...edScr(b.lat, b.lon)); }
+    if (!g) { ctx.setLineDash([2, 7]); ctx.strokeStyle = 'rgba(128,128,128,.8)'; ctx.lineWidth = 2.5; ctx.moveTo(...edScr(a.lat, a.lon)); ctx.lineTo(...edScr(b.lat, b.lon)); }
     else { ctx.setLineDash(b.mode === 'line' ? [9, 6] : []); ctx.strokeStyle = cssv('--acc'); ctx.lineWidth = 4.5; g.forEach((p, k) => { const q = edScr(p.lat, p.lon); k ? ctx.lineTo(...q) : ctx.moveTo(...q); }); }
     ctx.stroke(); ctx.setLineDash([]); });
   // preview: last point → B (connected automatically on «Готово») and → cursor
@@ -1235,8 +1441,6 @@ async function edRoute() {
   await Promise.all(need.map(async i => { const a = ED.wp[i], b = ED.wp[i + 1], k = ED.legKey[i];
     let g = await routeLeg(a, b, b.mode); if (!g) { fail++; g = [a, b]; } if (ED.legKey[i] === k) ED.legs[i] = g; }));
   if (my === edSeq) $('edBusy').style.display = 'none';
-  if (fail) { if (ED.mode !== 'line') { ED.mode = 'line'; ED.wp.forEach(w => { if (w.mode && w.mode !== 'line') w.mode = 'line'; }); }
-    if (!edRoute.warned) { edRoute.warned = true; toast('Сервис прокладки по дорогам не отвечает с вашего интернета — рисую прямыми. Ставьте точки почаще: они прилипают к дорогам на карте.', 8000); } }
   edInfo(); edDraw();
 }
 function edSnap() { ED.undo.push(JSON.stringify(ED.wp)); if (ED.undo.length > 300) ED.undo.shift(); }
@@ -1338,7 +1542,7 @@ function edPickIdx(x, y, lo = 0, hi = Infinity, R = 16) { const r = ED.r; let be
 }
 const editsKey = f => 'edits:' + f.name + ':' + f.bytes.length;
 // part of the gap: drawn line covers A → the record whose sensor distance matches the drawn length; the rest stays a gap
-$('edPart').onclick = () => {
+$('edPart').onclick = () => { pushHist();
   const f = ED.f, r = ED.r, L = edLen(), A = ED.A, B = ED.B; let M = A + 1;
   if (r.hasDist && r.sensor) { while (M < B - 2 && r.finalDist[M] - r.finalDist[A] < L) M++; }
   else { const T = r.R[A].t + (r.R[B].t - r.R[A].t) * Math.min(0.95, L / Math.max(1, VF.hav(r.R[A].lat ?? 0, r.R[A].lon ?? 0, ED.Bpt.lat, ED.Bpt.lon) || 1)); while (M < B - 2 && r.R[M].t < T) M++; }
@@ -1352,7 +1556,7 @@ $('edPart').onclick = () => {
   const left = r.hasDist ? r.finalDist[B] - r.finalDist[M] : null;
   toast(VF_I18N.lang === 'en' ? 'Part saved. The rest of the gap stays in the list — continue any time.' : `Часть сохранена. Остаток пропуска${left != null ? ' (' + fmt(left / 1000, 1) + ' км)' : ''} — в списке «Участки без GPS», продолжите когда удобно.`, 7000);
 };
-$('edDone').onclick = async () => {
+$('edDone').onclick = async () => { pushHist();
   const f = ED.f, r = ED.r;
   { const last = ED.wp[ED.wp.length - 1], rest = last && ED.Bpt ? VF.hav(last.lat, last.lon, ED.Bpt.lat, ED.Bpt.lon) : 0, L = edLen() + rest;
     if (ED.target && ED.target > 300 && Math.abs(L / ED.target - 1) > 0.3) {
@@ -1387,7 +1591,7 @@ function gapItems(r) {
   const tiny = (len, dt) => (len == null || len < 300) && dt < 90;
   for (const g of r.runs) { if (g.n <= 15 || tiny(g.sensLen ?? g.len, g.t1 - g.t0) || /интерп/.test(g.method) || g.srcs.includes('привязано к дорогам')) continue; const A = g.a - 1, B = g.b + 1, e = edit(A, B);
     out.push({ A, B, t0: g.t0, t1: g.t1, len: g.sensLen ?? g.len, status: e || /нарисовано/.test(g.method) ? 'drawn' : /прям/.test(g.method) ? 'line' : /интерп/.test(g.method) ? 'gpx' : 'gpx', edit: e }); }
-  for (const u of r.unfilled) { if (u.n <= 15) continue; const A = Math.max(ka, u.a - 1), B = Math.min(kb, u.b + 1);
+  for (const u of r.unfilled) { if (u.n <= 15 || u.erased) continue; const A = Math.max(ka, u.a - 1), B = Math.min(kb, u.b + 1);
     if (tiny(r.hasDist ? r.finalDist[B] - r.finalDist[A] : null, r.R[B].t - r.R[A].t)) continue;
     out.push({ A, B, t0: u.t0, t1: r.R[B].t, len: r.hasDist ? r.finalDist[B] - r.finalDist[A] : null, status: 'empty', edge: !!u.edge }); }
   return out.sort((a, b) => a.t0 - b.t0);
@@ -1395,15 +1599,16 @@ function gapItems(r) {
 function renderGapList(r) {
   const items = gapItems(r), L = t => new Date((t + VF.FIT_EPOCH + r.tzOff) * 1000).toISOString().slice(11, 16);
   const st = { empty: ['пусто', 'e'], line: ['прямая', 'e'], gpx: ['по GPX', ''], drawn: ['нарисовано', 'm'] };
-  let h = `<div class="gapbox"><div class="gaprow"><span>Участки без GPS${items.length ? ': ' + items.length : ''}</span><button class="btn sm" id="drawFree" title="Перерисовать любой участок трека — например, если GPS «плыл»">✎ Нарисовать участок</button></div>`;
+  let h = `<div class="gapbox"><div class="gaprow"><span>Участки без GPS${items.length ? ': ' + items.length : ''}</span><button class="btn sm" id="drawFree" title="Тянуть трек, срезать петли, перерисовать куски">✎ Править трек</button></div>`;
   if (items.length) h += '<div class="gaplist">' + items.map((g, k) => `<div class="gapit"><span class="num">${L(g.t0)}–${L(g.t1)}${g.len != null ? ' · ' + fmt(g.len / 1000, 1) + ' км' : ''}<span class="st ${st[g.status][1]}">${st[g.status][0]}</span></span><button class="btn sm" data-gap="${k}">${g.status === 'drawn' ? 'Изменить' : 'Дорисовать'}</button></div>`).join('') + '</div>';
   const ns = (cur().edits || []).filter(e => e.snap).length;
   const ne = (cur().edits || []).length;
   if (ne) h += `<div class="gaprow" style="margin-top:6px;font-weight:500"><span class="mute">Ваших правок: ${ne}</span><button class="btn sm" id="resetEdits" title="Вернуть трек как после автоматического исправления">↺ Сбросить все правки</button></div>`;
+  h += `<div class="mute" style="font-size:11.5px;margin-top:6px"><span id="roadsState"></span></div>`;
   h += '</div>';
   const box = document.createElement('div'); box.innerHTML = h; $('gaps').prepend(box.firstChild);
-  $('drawFree').onclick = () => openEditor(cur(), null);
-  if ($('resetEdits')) $('resetEdits').onclick = () => { const f = cur(); f.edits = []; f.res = null; showCurrent(); toast('Правки сброшены'); };
+  $('drawFree').onclick = () => teStart();
+  if ($('resetEdits')) $('resetEdits').onclick = () => { pushHist(); const f = cur(); f.edits = []; f.res = null; showCurrent(); toast('Правки сброшены'); };
 
   $('gaps').querySelectorAll('[data-gap]').forEach(b => b.onclick = () => { const g = items[+b.dataset.gap]; openEditor(cur(), g.A, g.B, g.edit, true); });
 }
@@ -1417,9 +1622,10 @@ function teStart() {
   TE.on = true; TE.f = f; TE.r = r; TE.undo = []; TE.sel = null; TE.selA = null; TE.drag = null;
   TE.pos = r.newLL.map((p, i) => (r.trimmed && r.trimmed[i]) || !p || p.lat == null ? null : { lat: p.lat, lon: p.lon });
   TE.orig = TE.pos.map(p => p && { ...p });
+  document.querySelectorAll('#colorSeg,#tileSeg').forEach(e => e.parentElement.style.visibility = 'hidden');
   teVerts(); M.view = 'edit'; $('teBar').style.display = 'flex'; $('teHintBox').style.display = 'block'; $('viewSeg').style.visibility = 'hidden'; teUi(); M.draw();
 }
-function teStop() { TE.on = false; $('teBar').style.display = 'none'; $('teHintBox').style.display = 'none'; $('viewSeg').style.visibility = ''; M.view = S.view; M.draw(); }
+function teStop() { document.querySelectorAll('#colorSeg,#tileSeg').forEach(e => e.parentElement.style.visibility = ''); TE.on = false; $('teBar').style.display = 'none'; $('teHintBox').style.display = 'none'; $('viewSeg').style.visibility = ''; M.view = S.view; M.draw(); }
 function teVerts() { // turning points of the current shape (Douglas–Peucker), the handles shown when zoomed in
   const pts = []; TE.pos.forEach((p, i) => { if (p) pts.push({ lat: p.lat, lon: p.lon, idx: i }); });
   const out = []; let run = [];
@@ -1453,7 +1659,7 @@ async function teApply(kind) {
 }
 function teChanged() { const ch = []; for (let i = 0; i < TE.pos.length; i++) { const p = TE.pos[i], o = TE.orig[i]; if ((!p) !== (!o) || (p && (Math.abs(p.lat - o.lat) > 1e-7 || Math.abs(p.lon - o.lon) > 1e-7))) ch.push(i); } return ch; }
 async function teSave(stay) {
-  const f = TE.f, r = TE.r, ch = teChanged(), N = r.N;
+  const f = TE.f, r = TE.r, ch = teChanged(), N = r.N; if (ch.length) pushHist();
   if (!ch.length) { if (!stay) teStop(); return; }
   // contiguous changed stretches (+1 record of anchor on each side)
   let rng = []; for (const i of ch) { const g = rng[rng.length - 1]; if (g && i - g[1] <= 3) g[1] = i; else rng.push([i, i]); }
@@ -1537,7 +1743,7 @@ function teOverlay(ctx, P) {
   if (TE.drag && !TE.drag.vert) { const p = TE.pos[TE.drag.i]; if (p) { const q = P(p.lat, p.lon), m = TE.R * 256 * 2 ** M.z / (40075016 * Math.cos(p.lat * Math.PI / 180)); ctx.beginPath(); ctx.arc(q[0], q[1], m, 0, 7); ctx.setLineDash([5, 5]); ctx.strokeStyle = cssv('--acc'); ctx.lineWidth = 1.5; ctx.stroke(); ctx.setLineDash([]); } }
 }
 
-window.__velofix = { S, M, addFiles, ED, openEditor, TE };
+window.__velofix = { S, M, addFiles, ED, openEditor, TE, localRoute, ROADS, routeLeg, healRoads, astar, ensureCells, nearestEdge };
 })();
 </script>
 </body>

@@ -247,6 +247,10 @@ const VF_I18N = (() => {
     ['Собираю архив…', 'Building the archive…'],
     ['авто', 'auto'], ['не указан', 'not set'], ['вес?', 'weight?'], ['Стереть все данные программы', 'Erase all app data'], ['Стереть настройки, незаконченную работу, выбранную папку и скачанные схемы улиц', 'Erase settings, unfinished work, the chosen folder and downloaded street maps'],
     ['Стереть все данные программы на этом компьютере: настройки (пульс, FTP, вес), незаконченную работу, папку сохранения и схемы улиц?', 'Erase all app data on this computer: settings (HR, FTP, weight), unfinished work, save folder and street maps?'],
+    ['Отменено', 'Undone'], ['Отменить последнее действие (Ctrl+Z)', 'Undo the last action (Ctrl+Z)'], ['PNG — «до и после» рядом', 'PNG — before & after side by side'], ['Исправить целую папку с FIT…', 'Fix a whole folder of FIT files…'],
+    ['Тянуть трек, срезать петли, перерисовать куски', 'Drag the track, cut loops, redraw pieces'], ['стёрто вручную', 'erased by hand'],
+    ['Не удалось загрузить схему улиц — участок нарисован прямой линией. Проверьте интернет и нажмите «Отменить», затем поставьте точку снова.', 'Could not load the street map — the leg is drawn straight. Check the internet, press «Undo» and place the point again.'], ['Схема улиц', 'Street map'], ['Схема улиц готова', 'Street map ready'], ['Схема улиц загружена — теперь прокладка работает сразу, даже без интернета', 'Street map loaded — routing is instant now, even offline'],
+    ['Скачать улицы Москвы заранее', 'Download Moscow streets in advance'], ['Один раз скачать все улицы Москвы — потом прокладка мгновенная и без интернета', 'Download all Moscow streets once — routing is then instant and offline'], ['Скачиваю улицы Москвы в фоне — можно работать дальше', 'Downloading Moscow streets in the background — keep working'],
     // ---- core: checks, reasons, methods
     ['Структура FIT: контрольные суммы и разбор до конца файла', 'FIT structure: checksums and parsing to the end of file'],
     ['Количество записей', 'Record count'],

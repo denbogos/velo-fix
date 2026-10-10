@@ -374,8 +374,10 @@ const VF = (() => {
       const P = new Poly(out, 'path'); P.src = os; return P;
     }
     const fills = {}, runs = [], unfilled = [];
+    const erased = (opt.edits || []).filter(e => e.type === 'del');
     for (let [a, b] of runsOf(valid, false)) {
       a = Math.max(a, ka); b = Math.min(b, kb); if (a > b) continue;
+      if (erased.some(e => R[a].t >= e.t0 && R[b].t <= e.t1)) { unfilled.push({ a, b, n: b - a + 1, t0: R[a].t, t1: R[b].t, erased: true, why: 'стёрто вручную' }); continue; }
       const A = a - 1, B = b + 1, n = b - a + 1;
       if (A < ka || B > kb) { unfilled.push({ a, b, n, t0: R[a].t, t1: R[b].t, edge: true, why: A < ka ? 'в начале записи нет опорной точки' : 'в конце записи нет опорной точки' }); continue; }
       const straight = hav(pos[A].lat, pos[A].lon, pos[B].lat, pos[B].lon), dur = R[B].t - R[A].t;
