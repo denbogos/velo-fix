@@ -170,13 +170,19 @@ body.drag #empty .box,body.drag #mapwrap{outline:3px dashed var(--acc);outline-o
       <div class="fl card" style="left:12px;bottom:14px;flex-direction:column;align-items:flex-start;gap:0"><div class="lg" id="legend"><span>—</span><i></i><span>—</span></div><div class="lg" id="legend2" style="padding-top:0;display:none"></div></div>
       <div id="teBar" class="card" style="position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:3;display:none;align-items:center;gap:8px;padding:6px 8px;font-size:12.5px;white-space:nowrap">
         <b style="padding:0 4px">✎ Правка трека <span class="mute" style="font-weight:500">beta</span></b>
-        <div class="seg sm" id="teTool"><button data-t="drag" class="on">Тянуть</button><button data-t="select">Выделить кусок</button></div>
-        <span id="teRadius" class="mute">охват <b id="teR"></b></span>
-        <span id="teSelOps" style="display:none;gap:6px"><button class="btn sm" data-op="line">Прямо</button><button class="btn sm" data-op="road">По дорогам</button><button class="btn sm" data-op="redraw">Перерисовать</button><button class="btn sm" data-op="erase">Стереть</button></span>
+        <div class="seg sm" id="teTool"><button data-t="drag" class="on" title="Тянуть трек кистью (D)">Тянуть</button><button data-t="select" title="Выделить кусок протяжкой (S)">Выделить</button><button data-t="erase" title="Стирать точки кистью (E)">Ластик</button></div>
+        <span id="teRadius" class="mute" title="Shift+колёсико или [ ] — изменить">кисть <b id="teR"></b></span>
+        <span id="teSelOps" style="display:none;gap:6px"><button class="btn sm" data-op="snap" title="Притянуть к ближайшим дорогам (G)">К дороге</button><button class="btn sm" data-op="road" title="Проложить по дорогам от начала до конца (R)">По дорогам</button><button class="btn sm" data-op="line" title="Прямой линией (L)">Прямо</button><button class="btn sm" data-op="redraw">Перерисовать</button><button class="btn sm" data-op="erase" title="Del">Стереть</button></span>
         <span id="teBusy" class="mute" style="display:none">прокладываю…</span>
-        <button class="btn sm" id="teUndo" title="Ctrl+Z">↶</button><button class="btn sm" id="teCancel">Отмена</button><button class="btn sm p" id="teDone">Готово</button>
+        <button class="btn sm" id="teSnapAll" title="Притянуть к дорогам весь трек">Весь трек к дорогам</button>
+        <button class="btn sm" id="teUndo" title="Отменить (Ctrl+Z)">↶</button><button class="btn sm" id="teRedo" title="Повторить (Ctrl+Y)">↷</button><button class="btn sm" id="teCancel">Отмена</button><button class="btn sm p" id="teDone">Готово</button>
       </div>
-      <div id="teHintBox" class="card" style="position:absolute;left:50%;top:58px;transform:translateX(-50%);z-index:3;padding:4px 10px;font-size:12px;display:none"><span id="teHint" class="mute"></span></div>
+      <div id="teHintBox" class="card" style="position:absolute;left:50%;top:58px;transform:translateX(-50%);z-index:3;padding:4px 10px;font-size:12px;display:none;text-align:center"><span id="teHint" class="mute"></span><div id="teStat" style="font-size:11.5px;margin-top:2px"></div></div>
+      <div id="teIssues" class="card" style="position:absolute;left:12px;top:12px;z-index:3;display:none;flex-direction:column;gap:6px;padding:8px 10px;font-size:12px;max-width:260px">
+        <div style="display:flex;align-items:center;gap:6px"><b>⚠ Подозрительные места</b><span class="mute" id="teIssN"></span></div>
+        <div id="teIssTxt"></div>
+        <div style="display:flex;gap:6px"><button class="btn sm" id="teIssPrev" title="Предыдущее">‹</button><button class="btn sm p" id="teIssFix">Исправить</button><button class="btn sm" id="teIssSkip">Пропустить</button><button class="btn sm" id="teIssNext" title="Следующее">›</button></div>
+      </div>
       <div id="cmp" class="card" style="position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:2;display:none;align-items:center;gap:8px;padding:6px 12px;font-size:12px"><span>Исправлено</span><input type="range" id="cmpRange" min="0" max="100" value="50" style="width:260px;accent-color:var(--acc)"><span>Исходник</span></div>
       <div id="tip"></div><div id="hlLabel"></div><div class="attr" id="attr"></div>
       <div id="empty"><div class="box">
@@ -619,7 +625,7 @@ function grad(t) { t = Math.max(0, Math.min(1, t)); const st = [[0, [37, 99, 235
 const M = {
   cv: $('map'), z: 12, cx: 0, cy: 0, w: 0, h: 0, cache: new Map(), raf: 0, res: null, view: 'after', hover: null, hl: null, range: [0, 1], failed: 0,
   resize() { const r = $('mapwrap').getBoundingClientRect(), d = devicePixelRatio || 1; this.w = r.width; this.h = r.height; this.cv.width = Math.round(r.width * d); this.cv.height = Math.round(r.height * d); this.draw(); },
-  ll(i) { const r = this.res; return this.view === 'edit' ? TE.pos[i] : this.view === 'after' ? r.newLL[i] : r.R[i]; },
+  ll(i) { const r = this.res; return this.view === 'edit' ? (TE.peek ? TE.orig[i] : TE.pos[i]) : this.view === 'after' ? r.newLL[i] : r.R[i]; },
   bounds(a = 0, b = this.res.N - 1, both = true) { const r = this.res; let s = Infinity, n = -Infinity, w = Infinity, e = -Infinity;
     for (let i = a; i <= b; i++) for (const p of both ? [r.newLL[i], r.R[i]] : [this.ll(i)]) if (p && p.lat != null) { s = Math.min(s, p.lat); n = Math.max(n, p.lat); w = Math.min(w, p.lon); e = Math.max(e, p.lon); }
     return s === Infinity ? null : { s, n, w, e }; },
@@ -1245,8 +1251,8 @@ function nearestEdge(lat, lon, maxD = 120) {
   }
   return best;
 }
-function astar(p, q, mode) {
-  const sa = nearestEdge(p.lat, p.lon), sb = nearestEdge(q.lat, q.lon); if (!sa || !sb) return null;
+function astar(p, q, mode, sa0, sb0) { // sa0/sb0 — уже найденные ближайшие рёбра (чтобы не искать заново)
+  const sa = sa0 || nearestEdge(p.lat, p.lon), sb = sb0 || nearestEdge(q.lat, q.lon); if (!sa || !sb) return null;
   if ((sa.a === sb.a && sa.b === sb.b)) return [p, { lat: sa.lat, lon: sa.lon }, { lat: sb.lat, lon: sb.lon }, q];
   const START = -1, GOAL = -2, h = nd => VF.hav(nd.lat, nd.lon, sb.lat, sb.lon);
   const g = new Map([[START, 0]]), prev = new Map(), open = [[h(sa), START]], done = new Set();
@@ -1633,29 +1639,36 @@ function renderGapList(r) {
 // ================= track editor («✎ Править трек», beta) =================
 // Works right on the main map. Every record keeps its time; only its position changes. On «Готово» the changed
 // stretches become route edits, and the core re-spreads the records along the new shape by the speed sensor.
-const TE = { on: false, tool: 'drag', R: 100, pos: null, orig: null, undo: [], sel: null, selA: null, drag: null, verts: [] };
+const TE = { on: false, tool: 'drag', R: 100, ER: 18, pos: null, orig: null, undo: [], redo: [], sel: null, selA: null, selDrag: null, drag: null, erasing: false,
+  verts: [], pins: new Set(), hover: null, peek: false, issues: [], issK: 0, busy: false };
 function teStart() {
   const f = cur(), r = f && f.res; if (!r) return;
-  TE.on = true; TE.f = f; TE.r = r; TE.undo = []; TE.sel = null; TE.selA = null; TE.drag = null;
+  Object.assign(TE, { on: true, f, r, undo: [], redo: [], sel: null, selA: null, selDrag: null, drag: null, erasing: false, pins: new Set(), hover: null, peek: false, issues: [], issK: 0 });
   TE.pos = r.newLL.map((p, i) => (r.trimmed && r.trimmed[i]) || !p || p.lat == null ? null : { lat: p.lat, lon: p.lon });
   TE.orig = TE.pos.map(p => p && { ...p });
   document.querySelectorAll('#colorSeg,#tileSeg').forEach(e => e.parentElement.style.visibility = 'hidden');
   teVerts(); M.view = 'edit'; $('teBar').style.display = 'flex'; $('teHintBox').style.display = 'block'; $('viewSeg').style.visibility = 'hidden'; teUi(); M.draw();
+  teFindIssues();
 }
-function teStop() { document.querySelectorAll('#colorSeg,#tileSeg').forEach(e => e.parentElement.style.visibility = ''); TE.on = false; $('teBar').style.display = 'none'; $('teHintBox').style.display = 'none'; $('viewSeg').style.visibility = ''; M.view = S.view; M.draw(); }
-function teVerts() { // turning points of the current shape (Douglas–Peucker), the handles shown when zoomed in
+function teStop() { document.querySelectorAll('#colorSeg,#tileSeg').forEach(e => e.parentElement.style.visibility = ''); TE.on = false; TE.peek = false; $('teBar').style.display = 'none'; $('teHintBox').style.display = 'none'; $('teIssues').style.display = 'none'; $('viewSeg').style.visibility = ''; M.view = S.view; M.draw(); }
+function teVerts() { // turning points of the current shape (Douglas–Peucker) + user pins, the drag handles
   const pts = []; TE.pos.forEach((p, i) => { if (p) pts.push({ lat: p.lat, lon: p.lon, idx: i }); });
   const out = []; let run = [];
-  const flush = () => { if (run.length) out.push(...simplifyPts(run, 5)); run = []; };
+  const flush = () => { if (run.length) for (const q of simplifyPts(run, 5)) out.push(q); run = []; };
   for (let k = 0; k < pts.length; k++) { if (k && pts[k].idx - pts[k - 1].idx > 1) flush(); run.push(pts[k]); } flush();
-  TE.verts = out.map(p => p.idx);
+  for (const i of [...TE.pins]) if (!TE.pos[i]) TE.pins.delete(i);
+  TE.verts = [...new Set([...out.map(p => p.idx), ...TE.pins])].sort((a, b) => a - b);
 }
-function teSnap() { TE.undo.push(TE.pos.map(p => p && { lat: p.lat, lon: p.lon })); if (TE.undo.length > 60) TE.undo.shift(); }
-function teUndo() { if (!TE.undo.length) return; TE.pos = TE.undo.pop(); teVerts(); teUi(); M.draw(); }
+const teCopy = () => TE.pos.map(p => p && { lat: p.lat, lon: p.lon });
+function teSnap() { TE.undo.push({ pos: teCopy(), pins: [...TE.pins] }); if (TE.undo.length > 60) TE.undo.shift(); TE.redo = []; }
+function teRestore(st) { TE.pos = st.pos; TE.pins = new Set(st.pins); teVerts(); teUi(); M.draw(); teIssuesStale(); }
+function teUndo() { if (!TE.undo.length) return; TE.redo.push({ pos: teCopy(), pins: [...TE.pins] }); teRestore(TE.undo.pop()); }
+function teRedo() { if (!TE.redo.length) return; TE.undo.push({ pos: teCopy(), pins: [...TE.pins] }); teRestore(TE.redo.pop()); }
 const teDist = i => TE.r.finalDist[i] ?? 0;
 function teHit(px, py, tol = 9) { let best = null, bd = tol * tol; for (let i = 0; i < TE.pos.length; i++) { const p = TE.pos[i]; if (!p) continue; const [x, y] = M.scr(p.lat, p.lon), d = (x - px) ** 2 + (y - py) ** 2; if (d < bd) { bd = d; best = i; } } return best; }
-function teHitVert(px, py) { if (M.z < 16) return null; let best = null, bd = 8 * 8; for (const i of TE.verts) { const p = TE.pos[i]; if (!p) continue; const [x, y] = M.scr(p.lat, p.lon), d = (x - px) ** 2 + (y - py) ** 2; if (d < bd) { bd = d; best = i; } } return best; }
+function teHitVert(px, py) { let best = null, bd = 8 * 8; for (const i of TE.verts) { if (M.z < 16 && !TE.pins.has(i)) continue; const p = TE.pos[i]; if (!p) continue; const [x, y] = M.scr(p.lat, p.lon), d = (x - px) ** 2 + (y - py) ** 2; if (d < bd) { bd = d; best = i; } } return best; }
 const llOf = (x, y) => ({ lat: latOf(M.cy + y - M.h / 2, M.z), lon: lonOf(M.cx + x - M.w / 2, M.z) });
+const mPx = (m, lat) => m * 256 * 2 ** M.z / (40075016 * Math.cos(lat * Math.PI / 180)); // metres -> screen px
 // place records a..b (inclusive) along a polyline by sensor distance
 function tePlace(a, b, line) {
   const L = [0]; for (let k = 1; k < line.length; k++) L.push(L[k - 1] + VF.hav(line[k - 1].lat, line[k - 1].lon, line[k].lat, line[k].lon));
@@ -1665,15 +1678,84 @@ function tePlace(a, b, line) {
     let k = 1; while (k < L.length - 1 && L[k] < s) k++; const v = (s - L[k - 1]) / ((L[k] - L[k - 1]) || 1), p = line[k - 1], q = line[k];
     TE.pos[i] = { lat: p.lat + v * (q.lat - p.lat), lon: p.lon + v * (q.lon - p.lon) }; }
 }
+// ---- «к дороге»: каждые ~30 м трека ищем ближайшую дорогу и соединяем найденные точки кратчайшим путём по улицам
+function teEdgeGrid(s, w, n, e) {
+  const G = 0.0004, grid = new Map(), key = (i, j) => i + ':' + j;
+  for (const a of ROADS.nodes.values()) { if (a.lat < s || a.lat > n || a.lon < w || a.lon > e) continue;
+    for (const ed of a.adj) { if (ed.to < a.id) continue; const b = ROADS.nodes.get(ed.to); if (!b) continue;
+      for (let i = Math.floor(Math.min(a.lat, b.lat) / G); i <= Math.floor(Math.max(a.lat, b.lat) / G); i++)
+        for (let j = Math.floor(Math.min(a.lon, b.lon) / G); j <= Math.floor(Math.max(a.lon, b.lon) / G); j++) { const k = key(i, j); let L = grid.get(k); if (!L) grid.set(k, L = []); L.push([a, b]); } } }
+  return (lat, lon, maxD) => { // ближайшее ребро в формате nearestEdge
+    const k = Math.cos(lat * Math.PI / 180), X = p => [(p.lon - lon) * 111320 * k, (p.lat - lat) * 110540]; let best = null; const seen = new Set();
+    const i0 = Math.floor(lat / G), j0 = Math.floor(lon / G);
+    for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) for (const sg of grid.get(key(i0 + di, j0 + dj)) || []) { if (seen.has(sg)) continue; seen.add(sg);
+      const [a, b] = sg, [ax, ay] = X(a), [bx, by] = X(b), dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy;
+      const u = L2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / L2)) : 0, d = Math.hypot(ax + u * dx, ay + u * dy);
+      if (d <= maxD && (!best || d < best.d)) best = { d, a, b, u, lat: a.lat + u * (b.lat - a.lat), lon: a.lon + u * (b.lon - a.lon) }; }
+    return best; };
+}
+async function teRoadsFor(a, b) { // схема улиц вдоль куска + «лечение» перекрёстков; возвращает поиск ближайшей дороги
+  let s = 90, w = 180, n = -90, e = -180; const cells = new Map();
+  for (let i = a; i <= b; i++) { const p = TE.pos[i] || TE.orig[i]; if (!p) continue; s = Math.min(s, p.lat); n = Math.max(n, p.lat); w = Math.min(w, p.lon); e = Math.max(e, p.lon);
+    if (i % 5 === 0 || i === b) for (const [dl, dn] of [[0, 0], [0.004, 0], [-0.004, 0], [0, 0.006], [0, -0.006]]) { const ci = CI(p.lat + dl), cj = CJ(p.lon + dn); cells.set(ci + ':' + cj, [ci, cj]); } }
+  if (s > n) return null;
+  await loadCells([...cells.values()], 'snap');
+  healRoads(s - 0.003, w - 0.005, n + 0.003, e + 0.005);
+  return teEdgeGrid(s - 0.004, w - 0.006, n + 0.004, e + 0.006);
+}
+async function teSnapRange(a, b, near, prog) {
+  near = near || await teRoadsFor(a, b); if (!near) return 0;
+  const idx = []; for (let i = a; i <= b; i++) if (TE.pos[i]) idx.push(i);
+  if (idx.length < 2) return 0;
+  // опорные точки ~ каждые 30 м пути (и обязательно концы куска)
+  const anchors = [idx[0]]; let last = teDist(idx[0]);
+  for (const i of idx) if (teDist(i) - last >= 30 || (!TE.r.hasDist && i - anchors[anchors.length - 1] >= 6)) { anchors.push(i); last = teDist(i); }
+  if (anchors[anchors.length - 1] !== idx[idx.length - 1]) anchors.push(idx[idx.length - 1]);
+  const hit = anchors.map(i => { const p = TE.pos[i], h = near(p.lat, p.lon, 35); return h ? { ...h, i } : { i, lat: p.lat, lon: p.lon, off: true }; });
+  let moved = 0;
+  for (let k = 1; k < hit.length; k++) {
+    const A = hit[k - 1], B = hit[k]; if (B.i - A.i < 1) continue;
+    // соседние опоры ищут разрыв в записи — не соединяем через него
+    let gap = false; for (let i = A.i; i <= B.i; i++) if (!TE.pos[i]) { gap = true; break; } if (gap) continue;
+    let line = [{ lat: A.lat, lon: A.lon }, { lat: B.lat, lon: B.lon }];
+    if (!A.off && !B.off) { const rt = astar(A, B, 'free', A, B);
+      if (rt) { let L = 0; for (let m = 1; m < rt.length; m++) L += VF.hav(rt[m - 1].lat, rt[m - 1].lon, rt[m].lat, rt[m].lon);
+        const sensor = TE.r.hasDist ? teDist(B.i) - teDist(A.i) : VF.hav(A.lat, A.lon, B.lat, B.lon);
+        if (L <= Math.max(1.6 * sensor, VF.hav(A.lat, A.lon, B.lat, B.lon) * 1.6) + 40) line = rt; } } // объезд вместо прямой — не верим
+    tePlace(A.i, B.i, line); moved++;
+    if (prog && k % 40 === 0) { prog(k / hit.length); await new Promise(r => setTimeout(r)); }
+  }
+  return moved;
+}
+async function teBusy(text, job) {
+  if (TE.busy) return; TE.busy = true; $('teBusy').textContent = text; $('teBusy').style.display = 'inline';
+  try { return await job(p => { $('teBusy').textContent = text + ' ' + Math.round(p * 100) + '%'; }); }
+  catch (e) { console.error(e); toast('Не получилось: ' + (e.message || e)); }
+  finally { TE.busy = false; $('teBusy').style.display = 'none'; teVerts(); teUi(); M.draw(); teIssuesStale(); }
+}
 async function teApply(kind) {
-  const [a, b] = TE.sel; if (!TE.pos[a] || !TE.pos[b]) { toast('Начало и конец выделения должны быть на треке'); return; }
+  if (!TE.sel) return; let [a, b] = TE.sel;
+  while (a < b && !TE.pos[a]) a++; while (b > a && !TE.pos[b]) b--;
+  if (!TE.pos[a] || !TE.pos[b] || b - a < 1) { toast('Начало и конец выделения должны быть на треке'); return; }
   if (kind === 'redraw') { TE.sel = null; await teSave(false); const f = cur(); openEditor(f, a, b, null); return; }
   teSnap();
   if (kind === 'line') tePlace(a, b, [TE.pos[a], TE.pos[b]]);
-  else if (kind === 'road') { $('teBusy').style.display = 'inline'; const g = await routeLeg(TE.pos[a], TE.pos[b], store.get('edMode', 'free') === 'line' ? 'free' : store.get('edMode', 'free')); $('teBusy').style.display = 'none'; tePlace(a, b, g && g.length > 2 ? g : [TE.pos[a], TE.pos[b]]); }
+  else if (kind === 'road') await teBusy('прокладываю…', async () => { const g = await routeLeg(TE.pos[a], TE.pos[b], store.get('edMode', 'free') === 'line' ? 'free' : store.get('edMode', 'free')); tePlace(a, b, g && g.length > 2 ? g : [TE.pos[a], TE.pos[b]]); });
+  else if (kind === 'snap') await teBusy('притягиваю к дорогам…', p => teSnapRange(a, b, null, p));
   else if (kind === 'erase') { for (let i = a + 1; i < b; i++) TE.pos[i] = null; }
-  TE.sel = null; teVerts(); teUi(); M.draw();
+  TE.sel = null; teVerts(); teUi(); M.draw(); teIssuesStale();
 }
+async function teSnapAll() {
+  teSnap(); TE.sel = null;
+  await teBusy('весь трек к дорогам…', async prog => {
+    const near = await teRoadsFor(0, TE.pos.length - 1); if (!near) return;
+    const runs = []; let i = 0; while (i < TE.pos.length) { if (TE.pos[i]) { let j = i; while (j + 1 < TE.pos.length && TE.pos[j + 1]) j++; runs.push([i, j]); i = j + 1; } else i++; }
+    const tot = runs.reduce((s, [x, y]) => s + y - x + 1, 0) || 1; let done = 0;
+    for (const [x, y] of runs) { await teSnapRange(x, y, near, p => prog((done + p * (y - x + 1)) / tot)); done += y - x + 1; prog(done / tot); }
+  });
+  toast('Трек притянут к дорогам — проверьте парки и дворы, где дорог на карте нет');
+}
+function teEraseAt(x, y) { let n = 0; for (let i = 0; i < TE.pos.length; i++) { const p = TE.pos[i]; if (!p) continue; const [px, py] = M.scr(p.lat, p.lon); if ((px - x) ** 2 + (py - y) ** 2 <= TE.ER * TE.ER) { TE.pos[i] = null; n++; } } return n; }
 function teChanged() { const ch = []; for (let i = 0; i < TE.pos.length; i++) { const p = TE.pos[i], o = TE.orig[i]; if ((!p) !== (!o) || (p && (Math.abs(p.lat - o.lat) > 1e-7 || Math.abs(p.lon - o.lon) > 1e-7))) ch.push(i); } return ch; }
 async function teSave(stay) {
   const f = TE.f, r = TE.r, ch = teChanged(), N = r.N; if (ch.length) pushHist();
@@ -1699,30 +1781,71 @@ async function teSave(stay) {
   f.edits = edits; f.res = null; if (!stay) teStop(); showCurrent(); if (stay) { TE.r = f.res; }
   toast('Правки трека сохранены');
 }
+// ---- живая сводка: длина трека против датчика колеса
+function teLen(arr) { let L = 0; for (let i = 1; i < arr.length; i++) { const a = arr[i - 1], b = arr[i]; if (a && b) L += VF.hav(a.lat, a.lon, b.lat, b.lon); } return L; }
+function teStat() {
+  if (!TE.on) return; const L = teLen(TE.pos), L0 = teLen(TE.orig); let sens = TE.r.hasDist ? 0 : null;
+  // датчик — только там, где есть трек (участки без GPS в сравнение не входят)
+  if (sens != null) for (let i = 1; i < TE.pos.length; i++) if (TE.pos[i] && TE.pos[i - 1]) sens += Math.max(0, teDist(i) - teDist(i - 1));
+  const d = L - L0;
+  $('teStat').innerHTML = `Трек <b>${fmt(L / 1000, 2)} км</b>` + (Math.abs(d) >= 5 ? ` <span class="mute">(${d > 0 ? '+' : '−'}${fmt(Math.abs(d) / 1000, 2)} км)</span>` : '') +
+    (sens ? ` · датчик ${fmt(sens / 1000, 2)} км · <b style="color:var(${Math.abs(L / sens - 1) <= 0.02 ? '--ok' : '--warn'})">${fmt(L / sens * 100, 1)}%</b>` : '');
+}
 function teUi() {
   document.querySelectorAll('#teTool button').forEach(b => b.classList.toggle('on', b.dataset.t === TE.tool));
-  $('teR').textContent = TE.R >= 1000 ? fmt(TE.R / 1000, 1) + ' км' : TE.R + ' м';
-  $('teRadius').style.display = TE.tool === 'drag' ? '' : 'none';
+  $('teR').textContent = TE.tool === 'erase' ? TE.ER * 2 + ' px' : TE.R >= 1000 ? fmt(TE.R / 1000, 1) + ' км' : TE.R + ' м';
+  $('teRadius').style.display = TE.tool === 'select' ? 'none' : '';
   $('teSelOps').style.display = TE.sel ? 'flex' : 'none';
-  $('teUndo').disabled = !TE.undo.length;
-  $('teHint').textContent = TE.tool === 'drag' ? (M.z >= 16 ? 'Тяните трек или точку · колёсико во время перетаскивания — шире/уже · правый клик по точке — удалить' : 'Тяните трек мышью · приблизьте карту, чтобы появились точки')
-    : TE.sel ? 'Что сделать с выделенным куском?' : TE.selA != null ? 'Щёлкните по треку — конец куска' : 'Щёлкните по треку — начало куска (например, перед петлёй)';
+  $('teUndo').disabled = !TE.undo.length; $('teRedo').disabled = !TE.redo.length; $('teSnapAll').disabled = TE.busy;
+  $('teHint').textContent = TE.peek ? 'Показан исходный трек — отпустите пробел'
+    : TE.tool === 'drag' ? 'Тяните трек или точку · Shift+колёсико или [ ] — размер кисти · двойной щелчок — точка излома · правый клик по точке — убрать'
+    : TE.tool === 'erase' ? 'Проведите по лишним точкам · Shift+колёсико или [ ] — размер ластика'
+    : TE.sel ? 'Что сделать с выделенным куском? (G — к дороге, R — по дорогам, L — прямо, Del — стереть)'
+    : TE.selA != null ? 'Щёлкните по треку — конец куска' : 'Проведите по треку с зажатой кнопкой или выделите на графике снизу';
+  teStat();
 }
-document.querySelectorAll('#teTool button').forEach(b => b.onclick = () => { TE.tool = b.dataset.t; TE.sel = null; TE.selA = null; teUi(); M.draw(); });
+document.querySelectorAll('#teTool button').forEach(b => b.onclick = () => teTool(b.dataset.t));
+function teTool(t) { TE.tool = t; TE.sel = null; TE.selA = null; TE.hover = null; teUi(); M.draw(); }
 $('editBtn').onclick = () => teStart();
 $('teCancel').onclick = () => { if (teChanged().length && !confirm(VF_I18N.tr('Выйти без сохранения правок?'))) return; teStop(); };
 $('teDone').onclick = () => teSave(false);
-$('teUndo').onclick = teUndo;
+$('teUndo').onclick = teUndo; $('teRedo').onclick = teRedo; $('teSnapAll').onclick = teSnapAll;
 $('teSelOps').querySelectorAll('[data-op]').forEach(b => b.onclick = () => teApply(b.dataset.op));
-addEventListener('keydown', e => { if (!TE.on || $('ed').classList.contains('open')) return; if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); teUndo(); } if (e.key === 'Escape') { TE.sel = null; TE.selA = null; teUi(); M.draw(); } });
+function teRadius(up) {
+  if (TE.tool === 'erase') TE.ER = Math.max(6, Math.min(80, Math.round(TE.ER * (up ? 1.25 : 0.8))));
+  else TE.R = Math.max(20, Math.min(3000, Math.round(TE.R * (up ? 1.25 : 0.8))));
+  teUi(); M.draw();
+}
+addEventListener('keydown', e => {
+  if (!TE.on || $('ed').classList.contains('open') || /^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || '')) return;
+  const k = e.key.toLowerCase(), ctrl = e.ctrlKey || e.metaKey;
+  if (ctrl && (k === 'y' || (k === 'z' && e.shiftKey) || k === 'н')) { e.preventDefault(); teRedo(); return; }
+  if (ctrl && (k === 'z' || k === 'я')) { e.preventDefault(); teUndo(); return; }
+  if (ctrl || e.altKey) return;
+  if (e.key === ' ') { e.preventDefault(); if (!TE.peek) { TE.peek = true; teUi(); M.draw(); } return; }
+  if (e.key === 'Escape') { TE.sel = null; TE.selA = null; teUi(); M.draw(); return; }
+  if (e.key === '[' || e.key === ']' || k === 'х' || k === 'ъ') { teRadius(e.key === ']' || k === 'ъ'); return; }
+  const tools = { d: 'drag', 'в': 'drag', s: 'select', 'ы': 'select', e: 'erase', 'у': 'erase' };
+  if (tools[k]) { teTool(tools[k]); return; }
+  if (TE.sel) { const ops = { g: 'snap', 'п': 'snap', r: 'road', 'к': 'road', l: 'line', 'д': 'line' };
+    if (ops[k]) { teApply(ops[k]); return; } if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); teApply('erase'); } }
+});
+addEventListener('keyup', e => { if (e.key === ' ' && TE.peek) { TE.peek = false; teUi(); M.draw(); } });
+addEventListener('blur', () => { if (TE.peek) { TE.peek = false; teUi(); M.draw(); } });
+// выделение на графике снизу тоже работает в редакторе
+PF.cv.addEventListener('pointerup', () => { if (!TE.on || !S.sel) return; TE.tool = 'select'; TE.selA = null; TE.sel = [S.sel[0], S.sel[1]]; teUi(); M.draw(); });
 // pointer handling on the main map (runs before the normal pan/hover handlers)
 {
   const cv = M.cv, rel = e => { const b = cv.getBoundingClientRect(); return [e.clientX - b.left, e.clientY - b.top]; };
   cv.addEventListener('pointerdown', e => {
-    if (!TE.on) return; const [x, y] = rel(e);
-    if (e.button === 2) { const v = teHitVert(x, y); if (v != null) { e.stopImmediatePropagation(); teSnap(); const k = TE.verts.indexOf(v), a = TE.verts[k - 1], b = TE.verts[k + 1]; if (a != null && b != null) tePlace(a, b, [TE.pos[a], TE.pos[b]]); teVerts(); teUi(); M.draw(); } return; }
-    if (TE.tool === 'select') { const i = teHit(x, y, 14); if (i == null) return; e.stopImmediatePropagation();
-      if (TE.selA == null || TE.sel) { TE.selA = i; TE.sel = null; } else { TE.sel = [Math.min(TE.selA, i), Math.max(TE.selA, i)]; TE.selA = null; if (TE.sel[1] - TE.sel[0] < 2) TE.sel = null; }
+    if (!TE.on || TE.peek || TE.busy) return; const [x, y] = rel(e);
+    if (e.button === 2) { const v = teHitVert(x, y); if (v != null) { e.stopImmediatePropagation(); teSnap();
+        if (TE.pins.has(v)) TE.pins.delete(v); else { const k = TE.verts.indexOf(v), a = TE.verts[k - 1], b = TE.verts[k + 1]; if (a != null && b != null) tePlace(a, b, [TE.pos[a], TE.pos[b]]); }
+        teVerts(); teUi(); M.draw(); } return; }
+    if (TE.tool === 'erase') { e.stopImmediatePropagation(); cv.setPointerCapture(e.pointerId); teSnap(); TE.erasing = true; teEraseAt(x, y); M.draw(); return; }
+    if (TE.tool === 'select') { const i = teHit(x, y, 14); if (i == null) return; e.stopImmediatePropagation(); cv.setPointerCapture(e.pointerId);
+      if (TE.selA != null && !TE.sel) { TE.sel = [Math.min(TE.selA, i), Math.max(TE.selA, i)]; TE.selA = null; if (TE.sel[1] - TE.sel[0] < 2) TE.sel = null; TE.selDrag = null; }
+      else { TE.sel = null; TE.selA = i; TE.selDrag = { i0: i, moved: false }; }
       teUi(); M.draw(); return; }
     const v = teHitVert(x, y), i = v ?? teHit(x, y); if (i == null) return;
     e.stopImmediatePropagation(); cv.setPointerCapture(e.pointerId); teSnap();
@@ -1731,7 +1854,12 @@ addEventListener('keydown', e => { if (!TE.on || $('ed').classList.contains('ope
   }, true);
   cv.addEventListener('pointermove', e => {
     if (!TE.on) return; const [x, y] = rel(e);
-    if (!TE.drag) { if (TE.tool === 'select') { const i = teHit(x, y, 14); if (i !== TE.hoverSel) { TE.hoverSel = i; M.draw(); } } return; }
+    if (TE.erasing) { e.stopImmediatePropagation(); TE.hover = { x, y }; teEraseAt(x, y); M.draw(); return; }
+    if (TE.selDrag) { e.stopImmediatePropagation(); const i = teHit(x, y, 24); if (i != null && i !== TE.selDrag.i0) { TE.selDrag.moved = true; TE.sel = [Math.min(TE.selDrag.i0, i), Math.max(TE.selDrag.i0, i)]; M.draw(); } return; }
+    if (!TE.drag) {
+      if (TE.tool === 'select') { const i = teHit(x, y, 14); if (i !== TE.hoverSel) { TE.hoverSel = i; M.draw(); } }
+      else { const i = TE.tool === 'drag' ? teHit(x, y, 24) : null; TE.hover = { x, y, i }; M.draw(); }
+      return; }
     e.stopImmediatePropagation(); const d = TE.drag, p = llOf(x, y), dl = p.lat - d.start.lat, dn = p.lon - d.start.lon;
     const N = TE.pos.length, d0 = teDist(d.i);
     let a = d.i, b = d.i;
@@ -1743,24 +1871,89 @@ addEventListener('keydown', e => { if (!TE.on || $('ed').classList.contains('ope
       TE.pos[k] = { lat: o.lat + w * dl, lon: o.lon + w * dn }; }
     M.draw();
   }, true);
-  const up = e => { if (!TE.on || !TE.drag) return; e.stopImmediatePropagation(); TE.drag = null; teVerts(); teUi(); M.draw(); };
+  const up = e => {
+    if (!TE.on) return;
+    if (TE.erasing) { e.stopImmediatePropagation(); TE.erasing = false; teVerts(); teUi(); M.draw(); teIssuesStale(); return; }
+    if (TE.selDrag) { e.stopImmediatePropagation(); const sd = TE.selDrag; TE.selDrag = null;
+      if (sd.moved) { TE.selA = null; if (TE.sel && TE.sel[1] - TE.sel[0] < 2) TE.sel = null; } teUi(); M.draw(); return; }
+    if (!TE.drag) return; e.stopImmediatePropagation(); TE.drag = null; teVerts(); teUi(); M.draw(); teIssuesStale(); };
   cv.addEventListener('pointerup', up, true); cv.addEventListener('pointercancel', up, true);
-  cv.addEventListener('wheel', e => { if (!TE.on || !TE.drag || TE.drag.vert) return; e.preventDefault(); e.stopImmediatePropagation(); TE.R = Math.max(20, Math.min(3000, Math.round(TE.R * (e.deltaY < 0 ? 1.25 : 0.8)))); teUi(); }, { capture: true, passive: false });
+  cv.addEventListener('pointerleave', () => { if (TE.on && TE.hover) { TE.hover = null; M.draw(); } });
+  cv.addEventListener('wheel', e => { if (!TE.on || TE.tool === 'select' || !(e.shiftKey || (TE.drag && !TE.drag.vert))) return; e.preventDefault(); e.stopImmediatePropagation(); teRadius(e.deltaY < 0); }, { capture: true, passive: false });
+  cv.addEventListener('dblclick', e => { if (!TE.on || TE.tool !== 'drag') return; const [x, y] = rel(e), i = teHit(x, y, 12); if (i == null) return;
+    e.preventDefault(); e.stopImmediatePropagation(); teSnap(); TE.pins.add(i); teVerts(); teUi(); M.draw(); }, true);
   cv.addEventListener('contextmenu', e => { if (TE.on) e.preventDefault(); });
 }
+// ---- подозрительные места: облака точек на стоянках, одиночные выбросы, трек в стороне от дорог
+function teFindIssues() {
+  const r = TE.r, P = TE.pos, out = [], spd = i => r.newSpd[i] ?? r.R[i].spd ?? 0;
+  // 1) облако точек, пока стоите
+  let i = 0;
+  while (i < P.length) {
+    if (!P[i] || spd(i) >= 1) { i++; continue; }
+    let j = i; while (j + 1 < P.length && P[j + 1] && spd(j + 1) < 1) j++;
+    if (j - i >= 14) { const lat = P.slice(i, j + 1).map(p => p.lat).sort((a, b) => a - b), lon = P.slice(i, j + 1).map(p => p.lon).sort((a, b) => a - b);
+      const c = { lat: lat[lat.length >> 1], lon: lon[lon.length >> 1] }; let mx = 0; for (let k = i; k <= j; k++) mx = Math.max(mx, VF.hav(c.lat, c.lon, P[k].lat, P[k].lon));
+      if (mx > 12) out.push({ type: 'cloud', a: i, b: j, c, txt: `Облако точек на стоянке: ${j - i + 1} точек разбросаны на ${Math.round(mx)} м` }); }
+    i = j + 1;
+  }
+  // 2) одиночные выбросы («звёздочки»)
+  for (let k = 1; k < P.length - 1; k++) { const p = P[k - 1], q = P[k], s = P[k + 1]; if (!p || !q || !s) continue;
+    const d1 = VF.hav(p.lat, p.lon, q.lat, q.lon), d2 = VF.hav(q.lat, q.lon, s.lat, s.lon), d0 = VF.hav(p.lat, p.lon, s.lat, s.lon);
+    if (Math.min(d1, d2) > 25 && d1 + d2 > 3 * d0 + 40) { const g = out[out.length - 1]; if (g && g.type === 'spike' && k - g.b <= 3) { g.b = k; g.n++; g.txt = `Выбросы GPS: ${g.n} точки отскочили в сторону`; }
+      else out.push({ type: 'spike', a: k, b: k, n: 1, txt: `Выброс GPS: точка отскочила на ${Math.round(Math.min(d1, d2))} м` }); } }
+  // 3) в стороне от дорог (только где схема улиц уже загружена)
+  if (ROADS.nodes.size) {
+    let s = 90, w = 180, n = -90, e = -180; for (const p of P) if (p) { s = Math.min(s, p.lat); n = Math.max(n, p.lat); w = Math.min(w, p.lon); e = Math.max(e, p.lon); }
+    if (s <= n) { const near = teEdgeGrid(s - 0.002, w - 0.003, n + 0.002, e + 0.003); let run = null;
+      const loaded = p => ROADS.cells.has(cellKey(CI(p.lat), CJ(p.lon)));
+      for (let k = 0; k < P.length; k += 3) { const p = P[k]; const bad = p && spd(k) > 3 && loaded(p) && !near(p.lat, p.lon, 30);
+        if (bad) { if (run && k - run.b <= 6) run.b = k; else { if (run && run.b - run.a >= 6) out.push(run); run = { type: 'offroad', a: k, b: k }; } } }
+      if (run && run.b - run.a >= 6) out.push(run);
+      for (const g of out) if (g.type === 'offroad') { g.a = Math.max(0, g.a - 3); g.b = Math.min(P.length - 1, g.b + 3); g.txt = `Трек в стороне от дорог (${Math.round(teDist(g.b) - teDist(g.a))} м) — возможно, GPS «гуляет» по домам`; } }
+  }
+  out.sort((x, y) => x.a - y.a); TE.issues = out; TE.issK = 0; teIssUi();
+}
+let teIssT = 0; function teIssuesStale() { clearTimeout(teIssT); teIssT = setTimeout(() => { if (TE.on) { const k = TE.issK; teFindIssues(); TE.issK = Math.min(k, Math.max(0, TE.issues.length - 1)); teIssUi(false); } }, 400); }
+function teIssUi(go = true) {
+  const box = $('teIssues'), L = TE.issues; box.style.display = TE.on && L.length ? 'flex' : 'none'; if (!L.length) { M.draw(); return; }
+  const g = L[TE.issK]; $('teIssN').textContent = `${TE.issK + 1} из ${L.length}`; $('teIssTxt').textContent = g.txt;
+  $('teIssPrev').disabled = TE.issK === 0; $('teIssNext').disabled = TE.issK >= L.length - 1;
+  if (go) M.fitRange(Math.max(0, g.a - 30), Math.min(TE.pos.length - 1, g.b + 30)); M.draw();
+}
+$('teIssPrev').onclick = () => { if (TE.issK > 0) { TE.issK--; teIssUi(); } };
+$('teIssNext').onclick = () => { if (TE.issK < TE.issues.length - 1) { TE.issK++; teIssUi(); } };
+$('teIssSkip').onclick = () => { TE.issues.splice(TE.issK, 1); TE.issK = Math.min(TE.issK, Math.max(0, TE.issues.length - 1)); teIssUi(); };
+$('teIssFix').onclick = async () => {
+  const g = TE.issues[TE.issK]; if (!g || TE.busy) return; teSnap();
+  if (g.type === 'cloud') for (let k = g.a; k <= g.b; k++) { if (TE.pos[k]) TE.pos[k] = { ...g.c }; }
+  else if (g.type === 'spike') for (let k = g.a; k <= g.b; k++) { let p = k - 1, q = k + 1; while (p > 0 && (!TE.pos[p] || (p >= g.a && p <= g.b))) p--; while (q < TE.pos.length - 1 && (!TE.pos[q] || (q >= g.a && q <= g.b))) q++;
+    if (TE.pos[p] && TE.pos[q]) { const u = (k - p) / (q - p); TE.pos[k] = { lat: TE.pos[p].lat + u * (TE.pos[q].lat - TE.pos[p].lat), lon: TE.pos[p].lon + u * (TE.pos[q].lon - TE.pos[p].lon) }; } }
+  else if (g.type === 'offroad') await teBusy('притягиваю к дорогам…', p => teSnapRange(g.a, g.b, null, p));
+  TE.issues.splice(TE.issK, 1); TE.issK = Math.min(TE.issK, Math.max(0, TE.issues.length - 1));
+  teVerts(); teUi(); teIssUi(); teIssuesStale();
+};
 function teOverlay(ctx, P) {
-  if (!TE.on) return;
+  if (!TE.on || TE.peek) return;
+  const g = TE.issues[TE.issK];
+  if (g && $('teIssues').style.display !== 'none') { ctx.strokeStyle = cssv('--warn'); ctx.lineWidth = 12; ctx.globalAlpha = .35; ctx.beginPath(); let st = false;
+    for (let i = g.a; i <= g.b; i++) { const p = TE.pos[i]; if (!p) { st = false; continue; } const q = P(p.lat, p.lon); st ? ctx.lineTo(...q) : ctx.moveTo(...q); st = true; }
+    if (g.a === g.b && TE.pos[g.a]) { const q = P(TE.pos[g.a].lat, TE.pos[g.a].lon); ctx.arc(q[0], q[1], 10, 0, 7); } ctx.stroke(); ctx.globalAlpha = 1; }
   if (TE.sel || TE.selA != null || TE.hoverSel != null) {
     const [a, b] = TE.sel || [TE.selA ?? TE.hoverSel, TE.selA ?? TE.hoverSel];
     ctx.strokeStyle = '#7c3aed'; ctx.lineWidth = 9; ctx.globalAlpha = .55; ctx.beginPath(); let st = false;
     for (let i = a; i <= b; i++) { const p = TE.pos[i]; if (!p) { st = false; continue; } const q = P(p.lat, p.lon); st ? ctx.lineTo(...q) : ctx.moveTo(...q); st = true; } ctx.stroke(); ctx.globalAlpha = 1;
     for (const i of [TE.selA, TE.hoverSel, ...(TE.sel || [])]) { if (i == null || !TE.pos[i]) continue; const q = P(TE.pos[i].lat, TE.pos[i].lon); ctx.beginPath(); ctx.arc(q[0], q[1], 7, 0, 7); ctx.fillStyle = '#7c3aed'; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; ctx.stroke(); }
   }
-  if (M.z >= 16 && TE.tool === 'drag') for (const i of TE.verts) { const p = TE.pos[i]; if (!p) continue; const q = P(p.lat, p.lon); if (q[0] < -10 || q[1] < -10 || q[0] > M.w + 10 || q[1] > M.h + 10) continue; ctx.beginPath(); ctx.arc(q[0], q[1], 4, 0, 7); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = cssv('--acc'); ctx.stroke(); }
-  if (TE.drag && !TE.drag.vert) { const p = TE.pos[TE.drag.i]; if (p) { const q = P(p.lat, p.lon), m = TE.R * 256 * 2 ** M.z / (40075016 * Math.cos(p.lat * Math.PI / 180)); ctx.beginPath(); ctx.arc(q[0], q[1], m, 0, 7); ctx.setLineDash([5, 5]); ctx.strokeStyle = cssv('--acc'); ctx.lineWidth = 1.5; ctx.stroke(); ctx.setLineDash([]); } }
+  if (TE.tool === 'drag') for (const i of TE.verts) { const pin = TE.pins.has(i); if (M.z < 16 && !pin) continue; const p = TE.pos[i]; if (!p) continue; const q = P(p.lat, p.lon); if (q[0] < -10 || q[1] < -10 || q[0] > M.w + 10 || q[1] > M.h + 10) continue;
+    ctx.beginPath(); ctx.arc(q[0], q[1], pin ? 5.5 : 4, 0, 7); ctx.fillStyle = pin ? cssv('--acc') : '#fff'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = pin ? '#fff' : cssv('--acc'); ctx.stroke(); }
+  // видимая кисть: под курсором до нажатия и во время перетаскивания
+  const brushAt = TE.drag && !TE.drag.vert ? TE.drag.i : (!TE.drag && TE.tool === 'drag' && TE.hover ? TE.hover.i : null);
+  if (brushAt != null && TE.pos[brushAt]) { const p = TE.pos[brushAt], q = P(p.lat, p.lon); ctx.beginPath(); ctx.arc(q[0], q[1], mPx(TE.R, p.lat), 0, 7); ctx.setLineDash([5, 5]); ctx.strokeStyle = cssv('--acc'); ctx.lineWidth = 1.5; ctx.stroke(); ctx.setLineDash([]); }
+  if (TE.tool === 'erase' && TE.hover) { ctx.beginPath(); ctx.arc(TE.hover.x, TE.hover.y, TE.ER, 0, 7); ctx.fillStyle = cssv('--bad'); ctx.globalAlpha = .15; ctx.fill(); ctx.globalAlpha = 1; ctx.strokeStyle = cssv('--bad'); ctx.lineWidth = 1.5; ctx.stroke(); }
 }
 
-window.__velofix = { S, M, selectFix, fixList, addFiles, ED, openEditor, TE, localRoute, ROADS, routeLeg, healRoads, astar, ensureCells, nearestEdge };
+window.__velofix = { S, M, selectFix, fixList, addFiles, ED, openEditor, TE, teStart, teApply, teSnapAll, teFindIssues, teUndo, teRedo, teSave, localRoute, ROADS, routeLeg, healRoads, astar, ensureCells, nearestEdge };
 })();
 </script>
 </body>
