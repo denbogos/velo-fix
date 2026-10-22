@@ -4,7 +4,12 @@ const VF = (() => {
   const FIT_EPOCH = 631065600, SC = 180 / 2 ** 31, RE = 6371008.8;
   const BT = { 0x00: ['u8', 1, 0xFF], 0x01: ['i8', 1, 0x7F], 0x02: ['u8', 1, 0xFF], 0x83: ['i16', 2, 0x7FFF], 0x84: ['u16', 2, 0xFFFF],
     0x85: ['i32', 4, 0x7FFFFFFF], 0x86: ['u32', 4, 0xFFFFFFFF], 0x07: ['str', 1, null], 0x88: ['f32', 4, null], 0x89: ['f64', 8, null],
-    0x0A: ['u8', 1, 0x00], 0x8B: ['u16', 2, 0x0000], 0x8C: ['u32', 4, 0x00000000], 0x0D: ['u8', 1, 0xFF] };
+    0x0A: ['u8', 1, 0x00], 0x8B: ['u16', 2, 0x0000], 0x8C: ['u32', 4, 0x00000000], 0x0D: ['u8', 1, 0xFF],
+    0x8E: ['i64', 8, 0x7FFFFFFFFFFFFFFFn], 0x8F: ['u64', 8, 0xFFFFFFFFFFFFFFFFn], 0x90: ['u64', 8, 0n] };
+
+  // Math.max(...arr) падает на длинных треках (лимит числа аргументов) — считаем циклом
+  function amax(arr, init = -Infinity) { let m = init; for (const v of arr) if (v > m) m = v; return m; }
+  function amin(arr, init = Infinity) { let m = init; for (const v of arr) if (v < m) m = v; return m; }
 
   // ---------- CRC ----------
   const CT = [0x0000, 0xCC01, 0xD801, 0x1400, 0xF001, 0x3C00, 0x2800, 0xE401, 0xA001, 0x6C00, 0x7800, 0xB401, 0x5000, 0x9C01, 0x8801, 0x4400];
@@ -47,6 +52,8 @@ const VF = (() => {
         const d = defs[local]; if (!d) throw new Error('FIT: данные без определения @' + start);
         const m = readData(d, p, start); m.end = p + d.size; p = m.end;
         const ts = m.v(253); if (ts != null) lastTs = ts;
+        // сжатые заголовки до первой полной метки времени: опорой служит time_created из file_id
+        else if (lastTs == null && m.g === 0 && m.v(4) != null) lastTs = m.v(4);
         msgs.push(m);
       }
     }
@@ -61,7 +68,8 @@ const VF = (() => {
       if (fd.size !== bs) return null; let v;
       switch (kind) { case 'u8': v = b[fd.off]; break; case 'i8': v = dv.getInt8(fd.off); break; case 'u16': v = dv.getUint16(fd.off, le); break;
         case 'i16': v = dv.getInt16(fd.off, le); break; case 'u32': v = dv.getUint32(fd.off, le); break; case 'i32': v = dv.getInt32(fd.off, le); break;
-        case 'f32': v = dv.getFloat32(fd.off, le); break; case 'f64': v = dv.getFloat64(fd.off, le); break; }
+        case 'f32': v = dv.getFloat32(fd.off, le); break; case 'f64': v = dv.getFloat64(fd.off, le); break;
+        case 'i64': case 'u64': { const big = kind === 'i64' ? dv.getBigInt64(fd.off, le) : dv.getBigUint64(fd.off, le); return big === inv ? null : Number(big); } }
       return (inv != null && v === inv) ? null : v;
     }
     return { bytes: b, dv, hsize, dsize, end, crcOk, msgs, protocol: b[1], profile: dv.getUint16(2, true) };
@@ -130,6 +138,67 @@ const VF = (() => {
     return { name, pts, nTime, creator };
   }
 
+
+  // ---------- GPX track -> FIT (so a recorded GPX goes through the same repair as a FIT) ----------
+  // Time gaps where the rider clearly moved are filled with GPS-less records (1 per second) with a straight-line
+  // distance, exactly like a FIT whose GPS dropped out, so they show up as «участки без GPS» to draw.
+  function gpxToFit(text) {
+    const pts = []; const re = /<trkpt\b([^>]*?)(\/>|>([\s\S]*?)<\/trkpt>)/g; let m;
+    const num = (body, tag) => { const r = new RegExp('<(?:\\w+:)?' + tag + '>\\s*([-\\d.eE+]+)\\s*</(?:\\w+:)?' + tag + '>', 'i').exec(body); return r ? +r[1] : null; };
+    while ((m = re.exec(text))) {
+      const a = m[1], la = /lat\s*=\s*["']([-\d.eE+]+)/.exec(a), lo = /lon\s*=\s*["']([-\d.eE+]+)/.exec(a), body = m[3] || '';
+      const tm = /<time>\s*([^<]+?)\s*<\/time>/.exec(body); if (!la || !lo || !tm) continue;
+      const t = Math.round(Date.parse(tm[1]) / 1000); if (isNaN(t)) continue;
+      pts.push({ t, lat: +la[1], lon: +lo[1], ele: num(body, 'ele'), hr: num(body, 'hr'), cad: num(body, 'cad'), pwr: num(body, 'power') ?? num(body, 'PowerInWatts') ?? num(body, 'Watts'), temp: num(body, 'atemp') ?? num(body, 'temp') });
+    }
+    pts.sort((x, y) => x.t - y.t);
+    const P = []; for (const p of pts) { if (P.length && p.t <= P[P.length - 1].t) continue; P.push(p); }
+    if (P.length < 10) throw new Error('В GPX нет записанного трека со временем');
+    // records: real points + fillers for gaps
+    const R = []; let dist = 0;
+    for (let i = 0; i < P.length; i++) {
+      const p = P[i];
+      if (i) { const q = P[i - 1], d = hav(q.lat, q.lon, p.lat, p.lon), dt = p.t - q.t;
+        if (dt >= 10 && d >= 50 && d / dt > 0.8) { // moved during the gap -> GPS dropout
+          for (let k = 1; k < dt; k++) { const u = k / dt; R.push({ t: q.t + k, lat: null, lon: null, ele: q.ele != null && p.ele != null ? q.ele + u * (p.ele - q.ele) : null, dist: dist + u * d, spd: d / dt }); }
+        }
+        dist += d; }
+      const nx = P[i + 1], pv = P[i - 1]; let spd = 0;
+      if (nx && pv) spd = (hav(pv.lat, pv.lon, nx.lat, nx.lon)) / Math.max(1, nx.t - pv.t); else if (nx) spd = hav(p.lat, p.lon, nx.lat, nx.lon) / Math.max(1, nx.t - p.t);
+      R.push({ t: p.t, lat: p.lat, lon: p.lon, ele: p.ele, dist, spd: Math.min(spd, 60), hr: p.hr, cad: p.cad, pwr: p.pwr, temp: p.temp });
+    }
+    const body = [];
+    const u8 = v => body.push(v & 255), u16 = v => { u8(v); u8(v >> 8); }, u32 = v => { u16(v & 0xFFFF); u16(Math.floor(v / 65536) & 0xFFFF); };
+    const def = (local, g, fields) => { u8(0x40 | local); u8(0); u8(0); u16(g); u8(fields.length); for (const f of fields) { u8(f[0]); u8(f[1]); u8(f[2]); } };
+    const T0 = R[0].t - FIT_EPOCH;
+    def(0, 0, [[0, 1, 0x00], [1, 2, 0x84], [4, 4, 0x86]]); u8(0); u8(4); u16(255); u32(T0);
+    def(1, 20, [[253, 4, 0x86], [0, 4, 0x85], [1, 4, 0x85], [2, 2, 0x84], [5, 4, 0x86], [6, 2, 0x84], [3, 1, 0x02], [4, 1, 0x02], [7, 2, 0x84], [13, 1, 0x01]]);
+    const i32 = v => u32(v < 0 ? v + 4294967296 : v);
+    for (const r of R) { u8(1); u32(r.t - FIT_EPOCH);
+      if (r.lat == null) { u32(0x7FFFFFFF); u32(0x7FFFFFFF); } else { i32(Math.round(r.lat / SC)); i32(Math.round(r.lon / SC)); }
+      u16(r.ele != null ? Math.max(0, Math.min(65534, Math.round((r.ele + 500) * 5))) : 0xFFFF);
+      u32(Math.round(r.dist * 100)); u16(r.spd != null ? Math.min(65534, Math.round(r.spd * 1000)) : 0xFFFF);
+      u8(r.hr != null ? Math.min(254, Math.round(r.hr)) : 0xFF); u8(r.cad != null ? Math.min(254, Math.round(r.cad)) : 0xFF);
+      u16(r.pwr != null ? Math.min(65534, Math.round(r.pwr)) : 0xFFFF); u8(r.temp != null ? Math.max(-127, Math.min(127, Math.round(r.temp))) & 255 : 0x7F); }
+    // event start/stop + activity so other services accept the file
+    def(2, 21, [[253, 4, 0x86], [0, 1, 0x00], [1, 1, 0x00]]);
+    u8(2); u32(T0); u8(0); u8(0); u8(2); u32(R[R.length - 1].t - FIT_EPOCH); u8(0); u8(4);
+    // lap + session + activity with totals (Strava / Garmin read the summary from them)
+    const tEnd = R[R.length - 1].t - FIT_EPOCH, total = R[R.length - 1].dist;
+    let timer = 0, maxSpd = 0, asc = 0, desc = 0, lastE = null;
+    for (let i = 1; i < R.length; i++) { const dt = R[i].t - R[i - 1].t; if (dt <= 10 || R[i].lat == null || R[i - 1].lat == null) timer += dt; }
+    for (const r of R) { if (r.lat != null && r.spd != null) maxSpd = Math.max(maxSpd, r.spd); if (r.ele != null) { if (lastE == null) lastE = r.ele; else if (Math.abs(r.ele - lastE) >= 3) { if (r.ele > lastE) asc += r.ele - lastE; else desc += lastE - r.ele; lastE = r.ele; } } }
+    const tot = [[253, 4, 0x86], [2, 4, 0x86], [7, 4, 0x86], [8, 4, 0x86], [9, 4, 0x86], [14, 2, 0x84], [15, 2, 0x84], [22, 2, 0x84], [23, 2, 0x84]];
+    const totVals = () => { u32(tEnd); u32(T0); u32((tEnd - T0) * 1000); u32(timer * 1000); u32(Math.round(total * 100)); u16(Math.min(65534, Math.round(total / Math.max(1, timer) * 1000))); u16(Math.min(65534, Math.round(maxSpd * 1000))); u16(Math.round(asc)); u16(Math.round(desc)); };
+    def(3, 19, tot); u8(3); totVals();
+    def(4, 18, tot.concat([[5, 1, 0x00]])); u8(4); totVals(); u8(2);
+    def(5, 34, [[253, 4, 0x86], [0, 4, 0x86], [1, 2, 0x84], [2, 1, 0x00], [3, 1, 0x00], [4, 1, 0x00]]); u8(5); u32(tEnd); u32(timer * 1000); u16(1); u8(0); u8(26); u8(1);
+    const out = new Uint8Array(14 + body.length + 2), dv = new DataView(out.buffer);
+    out[0] = 14; out[1] = 0x20; dv.setUint16(2, 2132, true); dv.setUint32(4, body.length, true); out.set([46, 70, 73, 84], 8);
+    dv.setUint16(12, crc16(out, 0, 12), true); out.set(body, 14); dv.setUint16(14 + body.length, crc16(out, 0, 14 + body.length), true);
+    return out;
+  }
+
   // ---------- main analysis ----------
   function run(fitBytes, gpxList, opt = {}) {
     const log = [], warn = [];
@@ -162,6 +231,13 @@ const VF = (() => {
     }
     // ---- speed sensor?
     const gpsless = R.filter(r => r.lat == null), withSpd = gpsless.filter(r => r.spd != null && r.spd > 0.5).length;
+    // одиночные записи без дистанции (сбой датчика) не должны отключать исправление одометра:
+    // если таких не больше 10 %, заполняем их предыдущим значением и помечаем — в файл они не пишутся
+    { const miss = R.filter(r => r.dist == null).length;
+      if (miss && miss <= N * 0.1) {
+        let last = null; for (const r of R) if (r.dist != null) { last = r.dist; break; }
+        for (const r of R) { if (r.dist == null) { r.dist = last; r.distFilled = true; } else last = r.dist; }
+      } }
     const hasDist = R.every(r => r.dist != null);
     const sensor = hasDist && (gpsless.length < 30 || withSpd / gpsless.length > 0.5) && R.some(r => r.spd != null);
     // ---- phantom movement: physically impossible bike speed without pedalling on flat ground
@@ -179,7 +255,7 @@ const VF = (() => {
     const phantomBlocks = [];
     { let i = 0; while (i < N) { if (phantom[i]) { let j = i; while (j + 1 < N && phantom[j + 1]) j++;
       const alts = []; for (let k = i; k <= j; k++) if (R[k].alt != null) alts.push(R[k].alt);
-      const altRange = alts.length ? Math.max(...alts) - Math.min(...alts) : null;
+      const altRange = alts.length ? amax(alts) - amin(alts) : null;
       let maxV = 0; for (let k = i; k <= j; k++) maxV = Math.max(maxV, KMH(k));
       const odo = hasDist ? R[j].dist - (i > 0 ? R[i - 1].dist : R[i].dist) : null;
       phantomBlocks.push({ a: i, b: j, t0: R[i].t, t1: R[j].t, maxV, altRange, odo, n: j - i + 1 }); i = j + 1; } else i++; } }
@@ -262,7 +338,7 @@ const VF = (() => {
         }
       }
     }
-    const xt = (i) => refs.length ? Math.min(...refs.map(P => P.nearest(R[i].lat, R[i].lon)[0])) : null;
+    const xt = (i) => refs.length ? amin(refs.map(P => P.nearest(R[i].lat, R[i].lon)[0])) : null;
     // runs
     function runsOf(arr, val) { const out = []; let i = 0; while (i < N) { if (arr[i] === val) { let j = i; while (j + 1 < N && arr[j + 1] === val) j++; out.push([i, j]); i = j + 1; } else i++; } return out; }
     const gapsLong = runsOf(valid, false).filter(([a, b]) => b - a + 1 >= 20);
@@ -511,7 +587,7 @@ const VF = (() => {
       } else if (ll.lat == null && origHas && !valid[i]) { // invalid fix not replaced -> write invalid
         put(m.f[0], le, 'i32', 0x7FFFFFFF); put(m.f[1], le, 'i32', 0x7FFFFFFF);
       }
-      if (newDist[i] != null && R[i].dist != null && Math.abs(newDist[i] - R[i].dist) > 0.001 && m.f[5] && m.f[5].size === 4) put(m.f[5], le, 'u32', Math.round(newDist[i] * 100));
+      if (newDist[i] != null && R[i].dist != null && !R[i].distFilled && Math.abs(newDist[i] - R[i].dist) > 0.001 && m.f[5] && m.f[5].size === 4) put(m.f[5], le, 'u32', Math.round(newDist[i] * 100));
       if (R[i].hr0 !== undefined && m.f[3] && m.f[3].size === 1) put(m.f[3], le, 'u8', R[i].hr == null ? 0xFF : R[i].hr);
       if (R[i].pwr0 !== undefined && m.f[7] && m.f[7].size === 2) put(m.f[7], le, 'u16', R[i].pwr == null ? 0xFFFF : R[i].pwr);
       if (ctx.phantom[i]) { if (m.f[6] && m.f[6].size === 2) put(m.f[6], le, 'u16', 0); if (m.f[73] && m.f[73].size === 4) put(m.f[73], le, 'u32', 0); }
@@ -544,8 +620,8 @@ const VF = (() => {
       fix(ses, { dist: 9, timer: 8, moving: [59], avg: [14, 124], max: [15, 125] }, -Infinity, Infinity);
       if (allLL.length && ses.f[29] && ses.f[32]) {
         const le = ses.def.le;
-        put(ses.f[29], le, 'i32', toSc(Math.max(...allLL.map(p => p.lat)))); put(ses.f[30], le, 'i32', toSc(Math.max(...allLL.map(p => p.lon))));
-        put(ses.f[31], le, 'i32', toSc(Math.min(...allLL.map(p => p.lat)))); put(ses.f[32], le, 'i32', toSc(Math.min(...allLL.map(p => p.lon))));
+        put(ses.f[29], le, 'i32', toSc(amax(allLL.map(p => p.lat)))); put(ses.f[30], le, 'i32', toSc(amax(allLL.map(p => p.lon))));
+        put(ses.f[31], le, 'i32', toSc(amin(allLL.map(p => p.lat)))); put(ses.f[32], le, 'i32', toSc(amin(allLL.map(p => p.lon))));
       }
     }
     for (const lp of laps) fix(lp, { dist: 9, timer: 8, moving: [52], avg: [13, 110], max: [14, 111] }, (lp.v(2) ?? -Infinity) - 1, lp.v(253) ?? Infinity);
@@ -777,7 +853,7 @@ const VF = (() => {
     const parts = [bytes.slice(0, A.f.hsize)]; const active = {};
     const pushMsg = (src, m) => { parts.push(src.slice(m.start, m.end)); };
     for (const m of head) { pushMsg(bytes, m); if (m.isDef) active[m.def.local] = m.def; }
-    let distOff = A.recs[A.recs.length - 1].v(5) ?? 0, lastT = A.recs[A.recs.length - 1].v(253);
+    let distOff = A.recs[A.recs.length - 1].v(5) ?? 0, lastT = A.recs[A.recs.length - 1].v(253), lastRecT = lastT, lastEvT = lastT;
     const totals = { timer: 0, elapsed: 0, dist: 0, asc: 0, desc: 0, cal: 0, maxSpd: 0, maxHr: 0, hrW: 0, hrT: 0 };
     const addSes = f => { const s = f.msgs.find(m => !m.isDef && m.g === 18); if (!s) return;
       totals.timer += s.v(8) ?? 0; totals.asc += s.v(22) ?? 0; totals.desc += s.v(23) ?? 0; totals.cal += s.v(11) ?? 0;
@@ -789,11 +865,12 @@ const VF = (() => {
       for (const m of B.f.msgs) {
         if (m.isDef) { if (m.def.g === 20 || m.def.g === 21) { parts.push(bb.slice(m.start, m.end)); active[m.def.local] = m.def; } continue; }
         if (m.g !== 20 && m.g !== 21) continue;
-        const t = m.v(253); if (t != null && t <= lastT) continue;
+        // события и записи сверяем по отдельности: событие «старт» и первая запись часто имеют одно время
+        const t = m.v(253); if (t != null && t <= (m.g === 20 ? lastRecT : lastEvT)) continue;
         if (active[m.def.local] !== m.def) { parts.push(m.def.bytes); active[m.def.local] = m.def; }
         const c = bb.slice(m.start, m.end);
         if (m.g === 20 && m.f[5] && m.v(5) != null && m.f[5].size === 4) { const v = m.v(5) + distOff; new DataView(c.buffer).setUint32(m.f[5].off - m.start, v, m.def.le); lastDist = v; }
-        parts.push(c); if (t != null) lastT = t;
+        parts.push(c); if (t != null) { if (m.g === 20) lastRecT = t; else lastEvT = t; lastT = Math.max(lastT, t); }
       }
       if (lastDist) distOff = lastDist;
     }
@@ -825,6 +902,6 @@ const VF = (() => {
     return out;
   }
 
-  return { merge, parseFit, parseGpx, run, toGpx, toTcx, toCsv, toReport, zip, hav, FIT_EPOCH, SC, hms };
+  return { amax, amin, merge, parseFit, parseGpx, gpxToFit, run, toGpx, toTcx, toCsv, toReport, zip, hav, FIT_EPOCH, SC, hms };
 })();
 if (typeof module !== 'undefined') module.exports = VF;

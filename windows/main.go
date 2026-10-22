@@ -9,8 +9,10 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"crypto/sha256"
 	_ "embed"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -33,7 +35,7 @@ import (
 //go:embed VELO_FIX.html
 var page []byte
 
-const appVersion = "2.6.0"
+const appVersion = "2.8.0"
 const port = "47815"
 const repo = "denbogos/velo-fix"
 
@@ -224,10 +226,14 @@ func doUpdate() (string, error) {
 	if !newer(ver, appVersion) {
 		return "", errors.New("Уже установлена последняя версия")
 	}
-	assetURL := ""
+	assetURL, sumURL := "", ""
 	for _, a := range rel.Assets {
-		if strings.HasSuffix(strings.ToLower(a.Name), "_windows.zip") {
+		n := strings.ToLower(a.Name)
+		if strings.HasSuffix(n, "_windows.zip") {
 			assetURL = a.URL
+		}
+		if strings.HasSuffix(n, "_windows.zip.sha256") {
+			sumURL = a.URL
 		}
 	}
 	if !strings.HasPrefix(assetURL, "https://github.com/"+repo+"/releases/download/") {
@@ -243,6 +249,25 @@ func doUpdate() (string, error) {
 	resp.Body.Close()
 	if err != nil || resp.StatusCode != 200 {
 		return "", errors.New("Не удалось скачать архив")
+	}
+	// контрольная сумма из релиза (файл *_Windows.zip.sha256); старые релизы без неё обновляются как раньше
+	if strings.HasPrefix(sumURL, "https://github.com/"+repo+"/releases/download/") {
+		req, _ = http.NewRequest("GET", sumURL, nil)
+		req.Header.Set("User-Agent", "VELO-FIX/"+appVersion)
+		resp, err = cl.Do(req)
+		if err != nil {
+			return "", errors.New("Не удалось скачать контрольную сумму: " + err.Error())
+		}
+		sumData, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		resp.Body.Close()
+		fields := strings.Fields(string(sumData))
+		if err != nil || resp.StatusCode != 200 || len(fields) == 0 {
+			return "", errors.New("Не удалось прочитать контрольную сумму")
+		}
+		got := sha256.Sum256(data)
+		if !strings.EqualFold(fields[0], hex.EncodeToString(got[:])) {
+			return "", errors.New("Архив обновления не совпадает с контрольной суммой — обновление отменено")
+		}
 	}
 	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {

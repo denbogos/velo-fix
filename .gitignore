@@ -1,0 +1,10 @@
+tests/fixtures/
+windows/VELO_FIX.html
+windows/VELO_FIX.exe
+windows/*.syso
+windows/*.res
+dist/
+
+windows/winres/
+windows/go.sum
+

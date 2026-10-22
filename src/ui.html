@@ -143,7 +143,7 @@ body.drag #empty .box,body.drag #mapwrap{outline:3px dashed var(--acc);outline-o
 <body>
 <div class="top">
   <div class="logo"><svg viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="var(--acc)"/><path d="M14 48 C24 48 20 33 31 32 C42 31 39 17 50 16" fill="none" stroke="#fff" stroke-width="5.2" stroke-linecap="round"/><circle cx="14" cy="48" r="6" fill="#fff"/><circle cx="50" cy="16" r="6" fill="#fff"/><circle cx="50" cy="16" r="2.6" fill="var(--acc)"/></svg>VELO FIX</div>
-  <button class="file" id="fileBtn" disabled><b id="fileTitle">Нет тренировки</b><span id="fileSub">Откройте FIT-файл</span></button>
+  <button class="file" id="fileBtn" disabled><b id="fileTitle">Нет тренировки</b><span id="fileSub">Откройте FIT или GPX</span></button>
   <button class="btn ic" id="addBtn" title="Добавить файлы (FIT, GPX)">＋</button>
   <button class="btn ic" id="histBtn" title="Отменить последнее действие (Ctrl+Z)" disabled>↶</button>
   <button class="btn hide-narrow" id="devBtn" title="Открыть заезды с подключённого Garmin / Wahoo" style="display:none"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M9 6h6M12 18h.01"/></svg>С велокомпьютера</button>
@@ -181,8 +181,8 @@ body.drag #empty .box,body.drag #mapwrap{outline:3px dashed var(--acc);outline-o
       <div id="tip"></div><div id="hlLabel"></div><div class="attr" id="attr"></div>
       <div id="empty"><div class="box">
         <svg viewBox="0 0 64 64" width="56" height="56"><rect width="64" height="64" rx="14" fill="var(--acc)"/><path d="M14 48 C24 48 20 33 31 32 C42 31 39 17 50 16" fill="none" stroke="#fff" stroke-width="5.2" stroke-linecap="round"/><circle cx="14" cy="48" r="6" fill="#fff"/><circle cx="50" cy="16" r="6" fill="#fff"/></svg>
-        <h2>Перетащите сюда FIT-файл</h2>
-        <p>Можно сразу несколько тренировок, а также GPX с реальным маршрутом — по нему восстановятся участки без GPS.</p>
+        <h2>Перетащите сюда FIT или GPX</h2>
+        <p>Можно сразу несколько тренировок. Записанный GPX (с временем) откроется как тренировка; GPX-маршрут рядом с FIT станет эталоном для участков без GPS.</p>
         <button class="btn p" id="openBtn" style="height:38px;padding:0 20px">Открыть файлы</button> <button class="btn" id="devBtn2" style="height:38px;padding:0 16px;display:none">С велокомпьютера</button>
         <div id="resume" style="display:none;margin:14px 0 0;padding:10px 12px;border:1px solid var(--acc);border-radius:9px;text-align:left;font-size:12.5px"></div>
         <p style="margin:14px 0 0;font-size:12px">Файлы обрабатываются только на этом компьютере. <button class="lnk" id="helpLink">Как пользоваться</button></p>
@@ -213,7 +213,7 @@ body.drag #empty .box,body.drag #mapwrap{outline:3px dashed var(--acc);outline-o
 <div class="modal" id="helpModal"><div class="in">
   <h2>Как пользоваться VELO FIX <span class="mute" style="font-size:13px;font-weight:500">версия /*VERSION*/</span></h2>
   <ol data-lang="ru">
-    <li><b>Откройте файлы.</b> Перетащите в окно один или несколько <b>.fit</b> с велокомпьютера (или нажмите «＋»). Если есть GPX с реальным маршрутом (нарисованный в gpx.studio, трек из komoot, запись с телефона) — добавьте его: по нему восстановятся участки, где пропал GPS.</li>
+    <li><b>Откройте файлы.</b> Перетащите в окно один или несколько <b>.fit</b> с велокомпьютера или записанный <b>.gpx</b> (Strava, телефон, часы) — или нажмите «＋». Если есть GPX с реальным маршрутом (нарисованный в gpx.studio, трек из komoot, запись с телефона) — добавьте его: по нему восстановятся участки, где пропал GPS.</li>
     <li><b>Программа сразу всё исправит:</b> ложные километры, «фантомное движение» (GPS «едет» 100+ км/ч, пока вы стоите), GPS-телепортации, дубликаты записей, нереальную максимальную скорость, выбросы пульса и мощности. Каденс, высота и время не меняются.</li>
     <li><b>Проверьте результат.</b> Справа — сводка: зачёркнутым показано, что было. Нажмите на исправление — карта покажет участок. Переключатель «Исправлено / Исходник» сверху показывает трек до и после. Наведите курсор на трек или на график — увидите время, скорость, пульс, мощность. Выделите участок на графике мышью — получите статистику отрезка.</li>
     <li><b>Несколько файлов.</b> Переключайтесь между тренировками кнопкой с названием слева вверху. Если велокомпьютер разбил заезд на части — нажмите «Склеить».</li>
@@ -299,8 +299,13 @@ function setStraight(v) { S.straight = v; store.set('straight', v); for (const f
 let uid = 0;
 async function addFiles(list) {
   let firstNew = null, gpxAdded = false;
+  const withFit = [...list].some(f => /\.fit$/i.test(f.name));
   for (const f of list) {
-    if (/\.gpx$/i.test(f.name)) { const g = VF.parseGpx(await f.text(), f.name); S.gpx = S.gpx.filter(x => x.name !== g.name); S.gpx.push(g); gpxAdded = true; continue; }
+    if (/\.gpx$/i.test(f.name)) { const txt = await f.text(), g = VF.parseGpx(txt, f.name);
+      // a recorded GPX (with time) opened on its own is a ride to repair; a planned route or a GPX next to a FIT is a reference
+      if (!withFit && g.nTime >= 10) { try { const entry = { id: ++uid, name: f.name, bytes: VF.gpxToFit(txt), res: null, err: null, edits: [], src: 'gpx' };
+          S.files = S.files.filter(x => x.name !== entry.name); S.files.push(entry); if (!firstNew) firstNew = entry; continue; } catch (e) { toast(f.name + ': ' + e.message); continue; } }
+      S.gpx = S.gpx.filter(x => x.name !== g.name); S.gpx.push(g); gpxAdded = true; continue; }
     if (!/\.fit$/i.test(f.name)) continue;
     const entry = { id: ++uid, name: f.name, bytes: new Uint8Array(await f.arrayBuffer()), res: null, err: null };
     entry.edits = [];
@@ -308,9 +313,20 @@ async function addFiles(list) {
   }
   if (gpxAdded) for (const f of S.files) f.res = null;
   if (firstNew) S.cur = firstNew.id;
-  if (!S.files.length) { toast(gpxAdded ? 'GPX добавлен. Теперь откройте FIT-файл тренировки.' : 'Нужен файл .fit'); return; }
+  if (!S.files.length) { toast(gpxAdded ? 'GPX маршрута без времени добавлен как эталон. Теперь откройте тренировку (FIT или GPX).' : 'Нужен файл .fit или .gpx'); return; }
   showCurrent(true);
   if (gpxAdded && !firstNew) toast('GPX маршрута добавлен — пропуски пересчитаны');
+  else suggestMerge(S.files.filter(f => !f.src && !f.merged && [...list].some(x => x.name === f.name)));
+}
+// несколько FIT одного заезда (велокомпьютер разбил запись) — предлагаем склеить
+function suggestMerge(fits) {
+  if (fits.length < 2) return;
+  const span = f => { try { const r = VF.parseFit(f.bytes).msgs.filter(m => !m.isDef && m.g === 20); return [r[0].v(253), r[r.length - 1].v(253)]; } catch (e) { return null; } };
+  const sp = fits.map(span); if (sp.some(s => !s || s[0] == null || s[1] == null)) return;
+  sp.sort((a, b) => a[0] - b[0]);
+  for (let i = 1; i < sp.length; i++) { const gap = sp[i][0] - sp[i - 1][1]; if (gap < 0 || gap > 3 * 3600) return; }
+  const b = $('mergeBtn'); b.style.outline = '2px solid var(--acc, #fc4c02)'; setTimeout(() => b.style.outline = '', 8000);
+  toast('Похоже, это части одного заезда — нажмите «Склеить», чтобы объединить их', 8000);
 }
 const cur = () => S.files.find(f => f.id === S.cur);
 function process(f) {
@@ -323,7 +339,7 @@ function fileStatus(f) { if (f.err) return ['var(--bad)', 'ошибка']; if (!
 let sessT = 0;
 function saveSession() { clearTimeout(sessT); sessT = setTimeout(async () => {
   try { const data = { at: Date.now(), cur: S.files.findIndex(f => f.id === S.cur), gpx: S.gpx.map(g => ({ name: g.name, pts: g.pts, nTime: g.nTime, creator: g.creator })),
-    files: S.files.map(f => ({ name: f.name, bytes: f.bytes, edits: f.edits || [], trim: f.trim || null, merged: !!f.merged })) };
+    files: S.files.map(f => ({ name: f.name, bytes: f.bytes, edits: f.edits || [], trim: f.trim || null, merged: !!f.merged, src: f.src || null })) };
     await idb('readwrite', st => data.files.length ? st.put(data, 'session') : st.delete('session')); } catch (e) {} }, 800); }
 async function offerSession() {
   let d = null; try { d = await idb('readonly', st => st.get('session')); } catch (e) {}
@@ -332,7 +348,7 @@ async function offerSession() {
   const el = $('resume'); el.style.display = 'block';
   el.innerHTML = `<b>${VF_I18N.lang === 'en' ? 'Unfinished work' : 'Незаконченная работа'}</b> · <span class="mute">${when}</span><br><span class="notr">${d.files.map(f => esc(f.name)).join(', ')}</span>${nE ? ` · ${VF_I18N.lang === 'en' ? 'edits' : 'правок'}: ${nE}` : ''}
     <div style="margin-top:8px;display:flex;gap:8px"><button class="btn p sm" id="resYes">${VF_I18N.lang === 'en' ? 'Continue' : 'Продолжить'}</button><button class="btn sm" id="resNo">${VF_I18N.lang === 'en' ? 'Start over' : 'Начать заново'}</button></div>`;
-  $('resYes').onclick = () => { S.gpx = d.gpx || []; S.files = d.files.map(f => ({ id: ++uid, name: f.name, bytes: f.bytes, res: null, err: null, edits: f.edits || [], trim: f.trim, merged: f.merged }));
+  $('resYes').onclick = () => { S.gpx = d.gpx || []; S.files = d.files.map(f => ({ id: ++uid, name: f.name, bytes: f.bytes, res: null, err: null, edits: f.edits || [], trim: f.trim, merged: f.merged, src: f.src || undefined }));
     S.cur = (S.files[d.cur] || S.files[0]).id; el.style.display = 'none'; showCurrent(true); toast(VF_I18N.lang === 'en' ? 'Work restored' : 'Работа восстановлена — продолжайте'); };
   $('resNo').onclick = async () => { el.style.display = 'none'; try { await idb('readwrite', st => st.delete('session')); } catch (e) {} };
 }
@@ -354,8 +370,9 @@ function showCurrent(fit) {
   const f = cur(); S.sel = null; S.fixSel = null; M.hover = null;
   $('empty').style.display = f ? 'none' : 'grid'; $('side').style.visibility = f && !f.err ? 'visible' : 'hidden';
   for (const id of ['saveBtn', 'saveMenuBtn', 'pngBtn', 'fileBtn']) $(id).disabled = !f;
+  $('saveBtn').textContent = VF_I18N.tr(f && f.src === 'gpx' ? 'Сохранить GPX' : 'Сохранить FIT');
   $('mergeBtn').disabled = S.files.length < 2;
-  if (!f) { $('fileTitle').textContent = 'Нет тренировки'; $('fileSub').textContent = 'Откройте FIT-файл'; return; }
+  if (!f) { $('fileTitle').textContent = 'Нет тренировки'; $('fileSub').textContent = 'Откройте FIT или GPX'; return; }
   process(f);
   if (f.err) { toast('Не удалось обработать ' + f.name + ': ' + f.err, 6000); }
   const r = f.res;
@@ -411,7 +428,7 @@ $('mergeBtn').onclick = () => { pushHist();
 // ================= stats =================
 function stats(r) {
   const R = r.R, keep = i => !(r.trimmed && r.trimmed[i]) && !r.dups.includes(i);
-  const hrAuto = Math.max(0, ...R.map(x => x.hr || 0)), hrMaxCfg = S.maxHr || Math.max(170, hrAuto);
+  const hrAuto = VF.amax(R.map(x => x.hr || 0), 0), hrMaxCfg = S.maxHr || Math.max(170, hrAuto);
   // FTP not set → estimate from this ride: 95% of the best 20-minute average power
   let ftpAuto = null; { let best = 0, sum = 0, j = 0; const P = R.map(x => x.pwr ?? 0);
     for (let i = 0; i < R.length; i++) { sum += P[i]; while (R[i].t - R[j].t > 1200) { sum -= P[j]; j++; } if (R[i].t - R[j].t >= 1150) best = Math.max(best, sum / (i - j + 1)); }
@@ -458,8 +475,8 @@ function fixList(r) {
   for (const g of r.runs.filter(x => x.n > 15 && !x.srcs.includes('привязано к дорогам'))) out.push({ sev: 'info', a: g.a, b: g.b, title: /нарисовано/.test(g.method) ? 'Нарисовано вручную' : 'Пропуск GPS восстановлен', sub: `${L(g.t0)}–${L(g.t1)} · ${g.srcs.join(' → ')} · ${g.conf}`, val: fmt(g.sensLen != null ? g.sensLen / 1000 : g.len / 1000, 1) + ' км', label: 'Восстановлено по ' + g.srcs.join(' → ') });
   if (r.phantomTimer) out.push({ sev: 'acc', a: r.phantomBlocks[0].a, b: r.phantomBlocks[r.phantomBlocks.length - 1].b, title: 'Время движения', sub: 'фантом считался ездой', val: '−' + hms(r.phantomTimer), label: 'Время движения пересчитано' });
   const sf = r.sensorFix || { hr: [], pwr: [] };
-  if (sf.hr.length) { const n = sf.hr.reduce((a, x) => a + x.n, 0), mx = Math.max(...sf.hr.map(x => x.max)); out.push({ sev: 'warn', a: Math.max(0, sf.hr[0].a - 20), b: Math.min(r.N - 1, sf.hr[sf.hr.length - 1].b + 20), groups: sf.hr.map(x => ({ a: Math.max(0, x.a - 10), b: Math.min(r.N - 1, x.b + 10) })), title: 'Выбросы пульса', sub: `${sf.hr.length > 1 ? sf.hr.length + ' × · ' : L(sf.hr[0].t0) + ' · '}до ${mx} уд/мин · помехи датчика`, val: String(n), label: `Выбросы пульса до ${mx}` }); }
-  if (sf.pwr.length) { const n = sf.pwr.reduce((a, x) => a + x.n, 0), mx = Math.max(...sf.pwr.map(x => x.max)); out.push({ sev: 'warn', a: Math.max(0, sf.pwr[0].a - 20), b: Math.min(r.N - 1, sf.pwr[sf.pwr.length - 1].b + 20), groups: sf.pwr.map(x => ({ a: Math.max(0, x.a - 10), b: Math.min(r.N - 1, x.b + 10) })), title: 'Выбросы мощности', sub: `${sf.pwr.length > 1 ? sf.pwr.length + ' × · ' : L(sf.pwr[0].t0) + ' · '}до ${mx} Вт · сбой измерителя`, val: String(n), label: `Выбросы мощности до ${mx} Вт` }); }
+  if (sf.hr.length) { const n = sf.hr.reduce((a, x) => a + x.n, 0), mx = VF.amax(sf.hr.map(x => x.max)); out.push({ sev: 'warn', a: Math.max(0, sf.hr[0].a - 20), b: Math.min(r.N - 1, sf.hr[sf.hr.length - 1].b + 20), groups: sf.hr.map(x => ({ a: Math.max(0, x.a - 10), b: Math.min(r.N - 1, x.b + 10) })), title: 'Выбросы пульса', sub: `${sf.hr.length > 1 ? sf.hr.length + ' × · ' : L(sf.hr[0].t0) + ' · '}до ${mx} уд/мин · помехи датчика`, val: String(n), label: `Выбросы пульса до ${mx}` }); }
+  if (sf.pwr.length) { const n = sf.pwr.reduce((a, x) => a + x.n, 0), mx = VF.amax(sf.pwr.map(x => x.max)); out.push({ sev: 'warn', a: Math.max(0, sf.pwr[0].a - 20), b: Math.min(r.N - 1, sf.pwr[sf.pwr.length - 1].b + 20), groups: sf.pwr.map(x => ({ a: Math.max(0, x.a - 10), b: Math.min(r.N - 1, x.b + 10) })), title: 'Выбросы мощности', sub: `${sf.pwr.length > 1 ? sf.pwr.length + ' × · ' : L(sf.pwr[0].t0) + ' · '}до ${mx} Вт · сбой измерителя`, val: String(n), label: `Выбросы мощности до ${mx} Вт` }); }
   if (r.dups.length) out.push({ sev: 'info', a: r.dups[0], b: r.dups[0], title: 'Дубликаты записей', sub: 'побайтовые копии удалены', val: String(r.dups.length), label: 'Дубликат записи' });
   return out;
 }
@@ -517,7 +534,7 @@ function renderSide() {
   }
   // hr zones
   const zn = [['Восстановление', '#60a5fa'], ['Аэробная', '#34d399'], ['Темповая', '#fbbf24'], ['Порог', '#fb923c'], ['VO2max', '#f87171']];
-  const ztot = st.hz.reduce((a, v) => a + v, 0) || 1, zmax = Math.max(...st.hz) || 1;
+  const ztot = st.hz.reduce((a, v) => a + v, 0) || 1, zmax = VF.amax(st.hz) || 1;
   $('hrBtn').textContent = `макс. ${st.hrMaxCfg} ▾`;
   $('zones').innerHTML = st.hrAvg ? st.hz.map((v, k) => `<div class="z num"><span>Z${k + 1}</span><span class="mute">${zn[k][0]}</span><div class="zb"><i style="width:${v / zmax * 100}%;background:${zn[k][1]}"></i></div><span>${Math.round(v / 60)}′</span><span class="mute">${Math.round(v / ztot * 100)}%</span></div>`).join('')
     : '<div class="mute" style="padding:0 18px">Нет данных пульса</div>';
@@ -606,13 +623,13 @@ const M = {
   bounds(a = 0, b = this.res.N - 1, both = true) { const r = this.res; let s = Infinity, n = -Infinity, w = Infinity, e = -Infinity;
     for (let i = a; i <= b; i++) for (const p of both ? [r.newLL[i], r.R[i]] : [this.ll(i)]) if (p && p.lat != null) { s = Math.min(s, p.lat); n = Math.max(n, p.lat); w = Math.min(w, p.lon); e = Math.max(e, p.lon); }
     return s === Infinity ? null : { s, n, w, e }; },
-  fitBox(bb, W = this.w, H = this.h, pad = 50) { let z = 2; for (let k = 17; k >= 2; k--) if (wx(bb.e, k) - wx(bb.w, k) < W - 2 * pad && wy(bb.s, k) - wy(bb.n, k) < H - 2 * pad) { z = k; break; }
+  fitBox(bb, W = this.w, H = this.h, pad = 50, maxZ = 17) { let z = 2; for (let k = maxZ; k >= 2; k--) if (wx(bb.e, k) - wx(bb.w, k) < W - 2 * pad && wy(bb.s, k) - wy(bb.n, k) < H - 2 * pad) { z = k; break; }
     return { z, cx: (wx(bb.w, z) + wx(bb.e, z)) / 2, cy: (wy(bb.s, z) + wy(bb.n, z)) / 2 }; },
   measuredBounds() { const r = this.res; let s = Infinity, n = -Infinity, w = Infinity, e = -Infinity, k = 0;
     for (let i = 0; i < r.N; i++) { if (r.trimmed && r.trimmed[i]) continue; const p = this.view === 'after' ? (r.fills[i] && /^прям|^интерп/.test(r.fills[i].src) ? null : r.newLL[i]) : (r.badReason[i] ? null : r.R[i]); if (!p || p.lat == null) continue; k++; s = Math.min(s, p.lat); n = Math.max(n, p.lat); w = Math.min(w, p.lon); e = Math.max(e, p.lon); }
     return k > 10 ? { s, n, w, e } : null; },
   fit() { if (!this.res) return; const b = this.measuredBounds() || this.bounds(); if (!b) return; Object.assign(this, this.fitBox(b)); this.draw(); },
-  fitRange(a, b) { const bb = this.bounds(a, b); if (!bb) return; const v = this.fitBox(bb, this.w, this.h, 110); v.z = Math.min(v.z, 16); Object.assign(this, v); this.draw(); },
+  fitRange(a, b) { const bb = this.bounds(a, b); if (!bb) return; Object.assign(this, this.fitBox(bb, this.w, this.h, 110, 16)); this.draw(); },
   scr(lat, lon, v = this) { return [wx(lon, v.z) - v.cx + v.w / 2, wy(lat, v.z) - v.cy + v.h / 2]; },
   zoomAt(dz, px, py) { const nz = Math.max(2, Math.min(18, this.z + dz)); if (nz === this.z) return;
     const lon = lonOf(this.cx + px - this.w / 2, this.z), lat = latOf(this.cy + py - this.h / 2, this.z);
@@ -744,7 +761,7 @@ function drawProfile() {
   const d0 = dist[idx[0]], d1 = dist[idx[idx.length - 1]] || 1, X = v => (v - d0) / (d1 - d0 || 1) * W;
   ctx.strokeStyle = cssv('--line'); ctx.lineWidth = 1; for (const f of [.25, .5, .75]) { ctx.beginPath(); ctx.moveTo(0, H * f); ctx.lineTo(W, H * f); ctx.stroke(); }
   const alts = idx.map(i => r.R[i].alt).filter(a => a != null);
-  if (alts.length) { const a0 = Math.min(...alts), a1 = Math.max(...alts) + 1e-6, YA = a => H - 2 - (a - a0) / (a1 - a0) * (H - 10);
+  if (alts.length) { const a0 = VF.amin(alts), a1 = VF.amax(alts) + 1e-6, YA = a => H - 2 - (a - a0) / (a1 - a0) * (H - 10);
     ctx.beginPath(); ctx.moveTo(X(d0), H); for (const i of idx) if (r.R[i].alt != null) ctx.lineTo(X(dist[i]), YA(r.R[i].alt)); ctx.lineTo(X(d1), H); ctx.closePath(); ctx.fillStyle = cssv('--elev'); ctx.fill(); }
   const line = (get, max, color, win, alpha = 1, lw = 1.3) => {
     const v = idx.map(i => get(i)); const sm = v.map((_, k) => { let s = 0, n = 0; for (let j = Math.max(0, k - win); j <= Math.min(v.length - 1, k + win); j++) if (v[j] != null) { s += v[j]; n++; } return n ? s / n : null; });
@@ -753,7 +770,7 @@ function drawProfile() {
   const st = cur() && cur().stats;
   if (st && st.hrAvg) line(i => r.R[i].hr ? r.R[i].hr - 80 : null, 130, cssv('--hr'), 10, .7, 1.1);
   if (st && st.hasP) line(i => r.R[i].pwr, Math.max(400, (st.np || 250) * 2.2), cssv('--pw'), 25, .75, 1.1);
-  const vmax = Math.max(20, ...idx.map(i => (r.newSpd[i] ?? 0) * 3.6)) * 1.05;
+  const vmax = VF.amax(idx.map(i => (r.newSpd[i] ?? 0) * 3.6), 20) * 1.05;
   line(i => r.newSpd[i] != null ? r.newSpd[i] * 3.6 : null, vmax, cssv('--acc'), 10, 1, 1.5);
   if (S.sel) { const x1 = X(dist[S.sel[0]]), x2 = X(dist[S.sel[1]]); ctx.fillStyle = cssv('--acc'); ctx.globalAlpha = .12; ctx.fillRect(Math.min(x1, x2), 0, Math.abs(x2 - x1), H); ctx.globalAlpha = 1; }
   if (M.hover != null && dist[M.hover] != null) { const x = X(dist[M.hover]); ctx.strokeStyle = cssv('--acc'); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
@@ -807,12 +824,12 @@ async function saveFile(name, data, type) {
       const w = await fh.createWritable(); await w.write(blob); await w.close(); toast('Сохранено: ' + fh.name); return true; } catch (e) { if (e.name === 'AbortError') return false; } }
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 800); toast('Скачано в «Загрузки»: ' + name); return true;
 }
-const baseName = f => f.name.replace(/\.fit$/i, '');
+const baseName = f => f.name.replace(/\.(fit|gpx)$/i, '');
 const outputs = f => { const enc = new TextEncoder(), b = baseName(f), r = f.res; return {
   fit: [b + '_RESTORED.fit', r.out, 'application/octet-stream'], gpx: [b + '_RESTORED.gpx', enc.encode(VF.toGpx(r)), 'application/gpx+xml'],
   tcx: [b + '_RESTORED.tcx', enc.encode(VF.toTcx(r)), 'application/xml'],
   md: [b + '_REPORT.md', enc.encode(VF_I18N.tr(VF.toReport(r, f.name))), 'text/markdown'], csv: [b + '_AUDIT.csv', enc.encode(VF_I18N.tr(VF.toCsv(r))), 'text/csv'] }; };
-$('saveBtn').onclick = () => { const f = cur(); if (f && f.res) saveFile(...outputs(f).fit); };
+$('saveBtn').onclick = () => { const f = cur(); if (f && f.res) saveFile(...outputs(f)[f.src === 'gpx' ? 'gpx' : 'fit']); };
 $('saveMenuBtn').onclick = () => {
   const m = $('saveMenu'); const fits = S.files.length;
   m.innerHTML = `<div class="cap">Эта тренировка</div><button data-k="fit">FIT для Strava / Garmin</button><button data-k="gpx">GPX — трек для других сервисов</button><button data-k="tcx">TCX — для TrainingPeaks, Polar и др.</button><button data-k="png">PNG — картинка карты</button><button data-k="ba">PNG — «до и после» рядом</button><button data-k="html">Отчёт «до и после» (.html)</button><button data-k="strava">Описание для Strava (скопировать)</button><button data-k="md">Отчёт об исправлениях (.md)</button><button data-k="csv">Таблица изменений (.csv)</button><button data-k="zip">Всё архивом (.zip)</button>
@@ -1376,7 +1393,7 @@ function edFit() {
   if (!pts.length) { const p = r.newLL[ED.A].lat != null ? r.newLL[ED.A] : r.newLL[ED.B]; if (p && p.lat != null) pts.push(p); }
   if (!pts.length) return; let s = 90, n = -90, w = 180, e = -180; for (const p of pts) { s = Math.min(s, p.lat); n = Math.max(n, p.lat); w = Math.min(w, p.lon); e = Math.max(e, p.lon); }
   if (n - s < 0.004) { s -= 0.002; n += 0.002; } if (e - w < 0.006) { w -= 0.003; e += 0.003; }
-  const fb = M.fitBox({ s, n, w, e }, ED.w, ED.h, 120), z = Math.min(fb.z, 17);
+  const fb = M.fitBox({ s, n, w, e }, ED.w, ED.h, 120, 17), z = fb.z;
   ED.z = z; ED.cx = (wx(w, z) + wx(e, z)) / 2; ED.cy = (wy(s, z) + wy(n, z)) / 2; edDraw();
 }
 function edPaint() {
@@ -1743,7 +1760,7 @@ function teOverlay(ctx, P) {
   if (TE.drag && !TE.drag.vert) { const p = TE.pos[TE.drag.i]; if (p) { const q = P(p.lat, p.lon), m = TE.R * 256 * 2 ** M.z / (40075016 * Math.cos(p.lat * Math.PI / 180)); ctx.beginPath(); ctx.arc(q[0], q[1], m, 0, 7); ctx.setLineDash([5, 5]); ctx.strokeStyle = cssv('--acc'); ctx.lineWidth = 1.5; ctx.stroke(); ctx.setLineDash([]); } }
 }
 
-window.__velofix = { S, M, addFiles, ED, openEditor, TE, localRoute, ROADS, routeLeg, healRoads, astar, ensureCells, nearestEdge };
+window.__velofix = { S, M, selectFix, fixList, addFiles, ED, openEditor, TE, localRoute, ROADS, routeLeg, healRoads, astar, ensureCells, nearestEdge };
 })();
 </script>
 </body>

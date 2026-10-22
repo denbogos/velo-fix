@@ -123,12 +123,24 @@ Windows 10 / 11 (64-бит) и Microsoft Edge или Google Chrome. Права �
 
 ## Сборка из исходников
 
-`src/core.js` — разбор и исправление FIT/GPX · `src/ui.html` — интерфейс · `src/i18n.js` — английский перевод · `windows/main.go` — запускатель.
+`src/core.js` — разбор и исправление FIT/GPX · `src/ui.html` — интерфейс · `src/i18n.js` — английский перевод · `windows/main.go` — запускатель · `tests/` — автотесты.
 
-```bash
-python3 build.py 2.6.0            # собирает windows/VELO_FIX.html
-cd windows && llvm-rc /C 65001 /FO app.res app.rc && llvm-cvtres /MACHINE:X64 /OUT:rsrc_windows_amd64.syso app.res
-go mod init velofix; CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "-H windowsgui -s -w" -o VELO_FIX.exe .
+Нужны Python 3, Chrome или Edge (для тестов) и Go 1.21+. Одна команда в PowerShell:
+
+```powershell
+.\build.ps1 2.8.0
+```
+
+Скрипт прогоняет тесты, проставляет версию во всех файлах, собирает `VELO_FIX.exe` и кладёт в `dist\` архив релиза и файл `.sha256` — загрузите оба в релиз GitHub: автообновление сверяет архив с контрольной суммой.
+
+Только тесты: `python tests/run.py`. Свои заезды для проверки можно положить в `tests/fixtures/*.fit` — в репозиторий они не попадают.
+
+## Проверка загрузки
+
+Рядом с каждым архивом в [Releases](../../releases/latest) лежит `VELO_FIX_<версия>_Windows.zip.sha256`. Сверить вручную:
+
+```powershell
+Get-FileHash .\VELO_FIX_2.8.0_Windows.zip -Algorithm SHA256
 ```
 
 ---
