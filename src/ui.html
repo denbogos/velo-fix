@@ -1392,12 +1392,15 @@ const edLL = (x, y) => ({ lat: latOf(ED.cy + y - ED.h / 2, ED.z), lon: lonOf(ED.
 function edDraw() { if (ED.raf) return; ED.raf = requestAnimationFrame(() => { ED.raf = 0; edPaint(); }); }
 function edResize() { const b = edCv.getBoundingClientRect(), d = devicePixelRatio || 1; ED.w = b.width; ED.h = b.height; edCv.width = Math.round(b.width * d); edCv.height = Math.round(b.height * d); edDraw(); }
 function edFit() {
+  if (ED.w < 200 || ED.h < 200) { edResize(); if (ED.w < 200 || ED.h < 200) { if ((edFit.tries = (edFit.tries || 0) + 1) < 30) requestAnimationFrame(edFit); return; } } edFit.tries = 0;   // the pane is not laid out yet
   const r = ED.r, pts = [...ED.wp]; if (ED.Bpt) pts.push(ED.Bpt);
   for (const g of ED.legs) if (g) pts.push(...g);
   // only the section itself: its ends and what is drawn (never the whole ride)
   for (const i of [ED.A, ED.B]) { const p = r.R[i]; if (p && p.lat != null && !r.badReason[i]) pts.push(p); }
   if (!pts.length) { const p = r.newLL[ED.A].lat != null ? r.newLL[ED.A] : r.newLL[ED.B]; if (p && p.lat != null) pts.push(p); }
   if (!pts.length) return; let s = 90, n = -90, w = 180, e = -180; for (const p of pts) { s = Math.min(s, p.lat); n = Math.max(n, p.lat); w = Math.min(w, p.lon); e = Math.max(e, p.lon); }
+  // start not drawn yet: show the area it can be in (a straight line from B is at most the sensor distance; usually ~half)
+  if (ED.noA && !ED.wp.length && ED.Bpt) { const R = Math.min(8000, Math.max(800, (ED.target || 3000) * 0.5)), dl = R / 110540, dw = R / (111320 * Math.cos(ED.Bpt.lat * Math.PI / 180)); s -= dl; n += dl; w -= dw; e += dw; }
   if (n - s < 0.004) { s -= 0.002; n += 0.002; } if (e - w < 0.006) { w -= 0.003; e += 0.003; }
   const fb = M.fitBox({ s, n, w, e }, ED.w, ED.h, 120, 17), z = fb.z;
   ED.z = z; ED.cx = (wx(w, z) + wx(e, z)) / 2; ED.cy = (wy(s, z) + wy(n, z)) / 2; edDraw();
@@ -1426,8 +1429,11 @@ function edPaint() {
   // points: small, like gpx.studio
   const dot = (p, rad, fill, stroke, lw, label) => { const q = edScr(p.lat, p.lon); ctx.beginPath(); ctx.arc(q[0], q[1], rad, 0, 7); ctx.fillStyle = fill; ctx.fill(); ctx.lineWidth = lw; ctx.strokeStyle = stroke; ctx.stroke();
     if (label) { ctx.fillStyle = '#fff'; ctx.font = '700 9px "Segoe UI",sans-serif'; ctx.textAlign = 'center'; ctx.fillText(label, q[0], q[1] + 3); ctx.textAlign = 'left'; } };
-  ED.wp.forEach((w, i) => { if (w.fixed) return; dot(w, i === ED.hot ? 5.5 : 4, '#fff', cssv('--acc'), 2); });
-  if (ED.wp[0] && ED.wp[0].fixed) dot(ED.wp[0], 8, '#16a34a', '#fff', 2.5, 'A');
+  ED.wp.forEach((w, i) => { if (w.fixed || (i === 0 && ED.noA)) return; dot(w, i === ED.hot ? 5.5 : 4, '#fff', cssv('--acc'), 2); });
+  if (ED.wp[0] && (ED.wp[0].fixed || ED.noA)) dot(ED.wp[0], ED.noA && ED.hot === 0 ? 9 : 8, '#16a34a', '#fff', 2.5, 'A');
+  // no recorded start: the cursor shows where the start will be
+  if (ED.noA && !ED.wp.length && ED.mouse && !ED.dragging) { const [x, y] = ED.mouse; ctx.globalAlpha = .55; dot(edLL(x, y), 8, '#16a34a', '#fff', 2.5, 'A'); ctx.globalAlpha = 1;
+    if (ED.Bpt) { ctx.beginPath(); ctx.setLineDash([2, 7]); ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 2.5; ctx.moveTo(x, y); ctx.lineTo(...edScr(ED.Bpt.lat, ED.Bpt.lon)); ctx.stroke(); ctx.setLineDash([]); } }
   if (ED.Bpt) dot(ED.Bpt, 8, '#dc2626', '#fff', 2.5, 'B');
   if (ED.ins) { const q = ED.ins; ctx.beginPath(); ctx.arc(q[0], q[1], 4, 0, 7); ctx.fillStyle = cssv('--acc'); ctx.fill(); }
   if (ED.pick && ED.pickHover != null) dot(r.R[ED.pickHover], 8, ED.pick === 'A' ? '#16a34a' : '#dc2626', '#fff', 3);
@@ -1448,9 +1454,11 @@ function edInfo() {
   const tot = L + rest;
   c.className = 'edcnt num ' + (T && ED.wp.length > 1 ? (Math.abs(tot / T - 1) <= 0.08 ? 'ok' : 'far') : '');
   c.innerHTML = `Нарисовано <b>${fmt(L / 1000, 2)}</b> км` + (T ? ` из <b>${fmt(T / 1000, 2)}</b> км по датчику` : '') + (ED.Bpt && rest > 30 ? ` · до B ${rest >= 1000 ? fmt(rest / 1000, 1) + ' км' : Math.round(rest) + ' м'}` : '');
-  $('edHint').innerHTML = !ED.wp.length || (ED.wp.length === 1 && ED.wp[0].fixed) ? '<b>Ставьте точки</b> по пути, где вы ехали' : ED.join ? '<b>Ставьте точки</b> · закончить — <b>щелчок по треку</b> или «Готово»' : ED.Bpt ? '<b>Ведите до точки B</b> и нажмите «Готово»' : '<b>Ставьте точки до финиша</b> и нажмите «Готово»';
+  $('edHint').innerHTML = ED.noA && !ED.wp.length ? (ED.Bpt ? '<b>Щёлкните, где начали поездку</b> — это старт A, дальше ставьте точки до B' : '<b>Щёлкните, где начали поездку</b> — это старт A')
+    : ED.noA && ED.wp.length === 1 ? '<b>Старт поставлен</b> — ставьте точки до B и нажмите «Готово» (старт можно перетащить)'
+    : !ED.wp.length || (ED.wp.length === 1 && ED.wp[0].fixed) ? '<b>Ставьте точки</b> по пути, где вы ехали' : ED.join ? '<b>Ставьте точки</b> · закончить — <b>щелчок по треку</b> или «Готово»' : ED.Bpt ? '<b>Ведите до точки B</b> и нажмите «Готово»' : '<b>Ставьте точки до финиша</b> и нажмите «Готово»';
   $('edHint').title = 'Тащите точку — сдвинуть · тащите линию — вставить точку · правый клик — удалить · Ctrl+Z — отменить · A и B можно перетаскивать';
-  $('edDone').disabled = ED.legs.some(g => !g) || (ED.wp.length < 2 && !(ED.Bpt && ED.wp.length === 1 && ED.wp[0].fixed));
+  $('edDone').disabled = ED.legs.some(g => !g) || (ED.wp.length < 2 && !(ED.Bpt && ED.wp.length === 1 && (ED.wp[0].fixed || ED.noA)));
   { const l = ED.wp[ED.wp.length - 1]; $('edPart').style.display = ED.Bpt && ED.wp.length >= 2 && l && VF.hav(l.lat, l.lon, ED.Bpt.lat, ED.Bpt.lon) > 50 ? '' : 'none'; $('edPart').disabled = ED.legs.some(g => !g); }
 }
 let edSeq = 0;
@@ -1494,6 +1502,7 @@ function edStart(A, B, existing, freeStart, extend) {
   ED.Bpt = has(B) && !ED.join ? { lat: r.R[B].lat, lon: r.R[B].lon } : null;
   if (existing && existing.wp) { ED.wp = existing.wp.map(w => ({ ...w })); if (ED.Bpt) { const l = ED.wp[ED.wp.length - 1]; if (l && l.fixed && ED.wp.length > 1) ED.wp.pop(); } }
   else ED.wp = freeStart ? [{ lat: freeStart.lat, lon: freeStart.lon, fixed: false }] : has(A) ? [{ lat: r.R[A].lat, lon: r.R[A].lon, fixed: true }] : [];
+  ED.noA = !has(A) && !ED.join;   // the ride starts without GPS: the first click is the start
   // the section has a recorded track → put it into the editor as editable points (drag / delete / insert like in gpx.studio)
   if (false) { const rec = []; for (let i = A + 1; i < B; i++) if (r.R[i].lat != null && !r.badReason[i]) rec.push({ lat: r.R[i].lat, lon: r.R[i].lon, idx: i });
     if (rec.length >= 3) { const keep = simplifyPts(rec, 6); for (const p of keep) ED.wp.push({ lat: p.lat, lon: p.lon, fixed: false, mode: 'line', idx: p.idx }); if (ED.wp[0] && ED.wp[0].mode == null && ED.wp.length > 1 && !ED.wp[0].fixed) delete ED.wp[0].mode; } }
