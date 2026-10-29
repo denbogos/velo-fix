@@ -1496,13 +1496,17 @@ function edStart(A, B, existing, freeStart, extend) {
     let a = A; while (a - 1 >= ka && ok(a - 1) && D[A] - D[a - 1] <= 400) a--;
     let b = B; if (B < kb) { while (b + 1 <= kb && ok(b + 1) && D[b + 1] - D[B] <= 400) b++; }
     ED.gapB = B; A = a; B = b; }
+  const has = i => r.R[i].lat != null && !r.badReason[i];
+  // a part saved earlier («Сохранить часть») ends inside the gap: continue to where GPS is back, otherwise the whole
+  // newly drawn line would be squeezed into the old short part (~4× speed, segments rejected by Strava)
+  if (!has(B) && !ED.join) { const kb = r.kb ?? r.N - 1; let b = B; while (b < kb && !has(b)) b++; if (has(b)) B = b; }
   ED.A = A; ED.B = B; ED.legs = []; ED.legKey = [];
   ED.target = r.hasDist && r.sensor ? r.finalDist[B] - r.finalDist[A] : null;
-  const has = i => r.R[i].lat != null && !r.badReason[i];
   ED.Bpt = has(B) && !ED.join ? { lat: r.R[B].lat, lon: r.R[B].lon } : null;
   if (existing && existing.wp) { ED.wp = existing.wp.map(w => ({ ...w })); if (ED.Bpt) { const l = ED.wp[ED.wp.length - 1]; if (l && l.fixed && ED.wp.length > 1) ED.wp.pop(); } }
-  else ED.wp = freeStart ? [{ lat: freeStart.lat, lon: freeStart.lon, fixed: false }] : has(A) ? [{ lat: r.R[A].lat, lon: r.R[A].lon, fixed: true }] : [];
-  ED.noA = !has(A) && !ED.join;   // the ride starts without GPS: the first click is the start
+  else { const dA = !has(A) && r.newLL[A] && r.newLL[A].lat != null ? r.newLL[A] : null;   // A = end of a part drawn earlier
+    ED.wp = freeStart ? [{ lat: freeStart.lat, lon: freeStart.lon, fixed: false }] : has(A) ? [{ lat: r.R[A].lat, lon: r.R[A].lon, fixed: true }] : dA ? [{ lat: dA.lat, lon: dA.lon, fixed: true }] : []; }
+  ED.noA = !ED.wp.length && !has(A) && !ED.join;   // the ride starts without GPS: the first click is the start
   // the section has a recorded track → put it into the editor as editable points (drag / delete / insert like in gpx.studio)
   if (false) { const rec = []; for (let i = A + 1; i < B; i++) if (r.R[i].lat != null && !r.badReason[i]) rec.push({ lat: r.R[i].lat, lon: r.R[i].lon, idx: i });
     if (rec.length >= 3) { const keep = simplifyPts(rec, 6); for (const p of keep) ED.wp.push({ lat: p.lat, lon: p.lon, fixed: false, mode: 'line', idx: p.idx }); if (ED.wp[0] && ED.wp[0].mode == null && ED.wp.length > 1 && !ED.wp[0].fixed) delete ED.wp[0].mode; } }
