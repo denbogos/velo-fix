@@ -1857,9 +1857,9 @@ PF.cv.addEventListener('pointerup', () => { if (!TE.on || !S.sel) return; TE.too
       else { TE.sel = null; TE.selA = i; TE.selDrag = { i0: i, moved: false }; }
       teUi(); M.draw(); return; }
     const v = teHitVert(x, y), i = v ?? teHit(x, y); if (i == null) return;
-    e.stopImmediatePropagation(); cv.setPointerCapture(e.pointerId); teSnap();
+    e.stopImmediatePropagation(); cv.setPointerCapture(e.pointerId);
     let lo = i, hi = i; if (v != null) { const k = TE.verts.indexOf(v); lo = TE.verts[k - 1] ?? v; hi = TE.verts[k + 1] ?? v; }
-    TE.drag = { i, vert: v != null, lo, hi, base: TE.pos.map(p => p && { ...p }), start: llOf(x, y) };
+    TE.drag = { i, vert: v != null, lo, hi, base: TE.pos.map(p => p && { ...p }), start: llOf(x, y), x0: x, y0: y, moved: false };
   }, true);
   cv.addEventListener('pointermove', e => {
     if (!TE.on) return; const [x, y] = rel(e);
@@ -1869,7 +1869,9 @@ PF.cv.addEventListener('pointerup', () => { if (!TE.on || !S.sel) return; TE.too
       if (TE.tool === 'select') { const i = teHit(x, y, 14); if (i !== TE.hoverSel) { TE.hoverSel = i; M.draw(); } }
       else { const i = TE.tool === 'drag' ? teHit(x, y, 24) : null; TE.hover = { x, y, i }; M.draw(); }
       return; }
-    e.stopImmediatePropagation(); const d = TE.drag, p = llOf(x, y), dl = p.lat - d.start.lat, dn = p.lon - d.start.lon;
+    e.stopImmediatePropagation(); const d = TE.drag;
+    if (!d.moved) { if (Math.hypot(x - d.x0, y - d.y0) < 5) return; d.moved = true; teSnap(); }   // a click is not an edit
+    const p = llOf(x, y), dl = p.lat - d.start.lat, dn = p.lon - d.start.lon;
     const N = TE.pos.length, d0 = teDist(d.i);
     let a = d.i, b = d.i;
     if (d.vert) { a = d.lo; b = d.hi; } else { while (a > 0 && d0 - teDist(a - 1) <= TE.R) a--; while (b < N - 1 && teDist(b + 1) - d0 <= TE.R) b++; }
@@ -1885,7 +1887,9 @@ PF.cv.addEventListener('pointerup', () => { if (!TE.on || !S.sel) return; TE.too
     if (TE.erasing) { e.stopImmediatePropagation(); TE.erasing = false; teVerts(); teUi(); M.draw(); teIssuesStale(); return; }
     if (TE.selDrag) { e.stopImmediatePropagation(); const sd = TE.selDrag; TE.selDrag = null;
       if (sd.moved) { TE.selA = null; if (TE.sel && TE.sel[1] - TE.sel[0] < 2) TE.sel = null; } teUi(); M.draw(); return; }
-    if (!TE.drag) return; e.stopImmediatePropagation(); TE.drag = null; teVerts(); teUi(); M.draw(); teIssuesStale(); };
+    if (!TE.drag) return; e.stopImmediatePropagation(); const moved = TE.drag.moved; TE.drag = null;
+    if (!moved) { M.draw(); return; }   // plain click: nothing changed
+    teVerts(); teUi(); M.draw(); teIssuesStale(); };
   cv.addEventListener('pointerup', up, true); cv.addEventListener('pointercancel', up, true);
   cv.addEventListener('pointerleave', () => { if (TE.on && TE.hover) { TE.hover = null; M.draw(); } });
   cv.addEventListener('wheel', e => { if (!TE.on || TE.tool === 'select' || !(e.shiftKey || (TE.drag && !TE.drag.vert))) return; e.preventDefault(); e.stopImmediatePropagation(); teRadius(e.deltaY < 0); }, { capture: true, passive: false });
@@ -1921,7 +1925,7 @@ function teFindIssues() {
       if (run && run.b - run.a >= 6) out.push(run);
       for (const g of out) if (g.type === 'offroad') { g.a = Math.max(0, g.a - 3); g.b = Math.min(P.length - 1, g.b + 3); g.txt = `Трек в стороне от дорог (${Math.round(teDist(g.b) - teDist(g.a))} м) — возможно, GPS «гуляет» по домам`; } }
   }
-  out.sort((x, y) => x.a - y.a); TE.issues = out; TE.issK = 0; teIssUi();
+  out.sort((x, y) => x.a - y.a); TE.issues = out; TE.issK = 0; teIssUi(false);   // only the card updates; the map moves on «‹ ›» / «Исправить»
 }
 let teIssT = 0; function teIssuesStale() { clearTimeout(teIssT); teIssT = setTimeout(() => { if (TE.on) { const k = TE.issK; teFindIssues(); TE.issK = Math.min(k, Math.max(0, TE.issues.length - 1)); teIssUi(false); } }, 400); }
 function teIssUi(go = true) {
