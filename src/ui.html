@@ -94,6 +94,10 @@ body.drag #empty .box,body.drag #mapwrap{outline:3px dashed var(--acc);outline-o
 .chk div{display:flex;gap:8px;padding:3px 0;font-size:12px}.chk .ok{color:var(--ok)}.chk .no{color:var(--warn)}.chk .in{color:var(--mute)}
 .gaps{padding:0 12px 4px;font-size:12px}
 .gapbox{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 10px;margin:0 0 8px;display:grid;gap:6px}
+.sc{margin:10px 18px 0;padding:8px 10px;border-radius:8px;font-size:12.5px;border:1px solid var(--line);background:var(--panel2);display:grid;gap:6px}
+.sc.ok{color:var(--ok);font-weight:600;border-color:color-mix(in srgb,var(--ok) 40%,var(--line))}
+.sc.warn{border-color:color-mix(in srgb,var(--warn) 55%,var(--line))}.sc.bad{border-color:var(--bad)}.sc.bad>b{color:var(--bad)}
+.sci{display:grid;grid-template-columns:8px 1fr auto auto;gap:6px;align-items:center}.sci i{width:8px;height:8px;border-radius:50%}.sci .lnk{font-size:12px}
 .gaprow{display:flex;align-items:center;gap:8px;justify-content:space-between;flex-wrap:wrap;font-weight:600}
 .seg.sm{height:26px}.seg.sm button{padding:0 9px;font-size:12px}.btn.sm{height:28px;font-size:12px;justify-self:start}
 .upd{display:none;align-items:center;gap:8px;background:color-mix(in srgb,var(--acc) 14%,var(--panel));border:1px solid var(--acc);color:var(--ink);border-radius:7px;padding:0 10px;height:32px;font-size:12.5px;font-weight:600;text-decoration:none}
@@ -116,17 +120,7 @@ body.drag #empty .box,body.drag #mapwrap{outline:3px dashed var(--acc);outline-o
 .field{display:grid;grid-template-columns:1fr 110px;gap:10px;align-items:center;margin:8px 0}
 .field input{padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel2)}
 #toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:9px;font-weight:500;display:none;z-index:40;box-shadow:var(--shadow);max-width:80%}
-#ed{position:fixed;inset:0;z-index:50;background:var(--bg);display:none;grid-template-rows:56px minmax(0,1fr)}
-#ed.open{display:grid}
-.edtop{display:flex;align-items:center;gap:8px;padding:0 14px;background:var(--panel);border-bottom:1px solid var(--line)}
-.edt{display:flex;flex-direction:column;line-height:1.25}.edt b{font-size:14px}.edt span{font-size:11.5px}
-.edcnt{margin-left:14px;font-size:13px;padding:5px 11px;border-radius:7px;background:var(--panel2);border:1px solid var(--line)}
-.edcnt b{font-size:15px}.edcnt.ok{border-color:var(--ok);color:var(--ok)}.edcnt.far{border-color:var(--warn);color:var(--warn)}
-.edmap{position:relative;overflow:hidden;background:var(--map);touch-action:none;user-select:none}
 #edCv{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair}
-.edhint{position:absolute;left:12px;bottom:14px;padding:8px 12px;font-size:12px;color:var(--mute);max-width:520px;z-index:2}
-.edhint b{color:var(--ink)}
-.edbusy{position:absolute;left:50%;top:14px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:5px 12px;border-radius:7px;font-size:12px;display:none;z-index:3}
 .gaplist{display:grid;gap:4px;margin-top:2px}
 .gapit{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;font-weight:500}
 .gapit .st{font-size:11px;font-weight:600;padding:1px 7px;border-radius:99px;background:var(--panel);border:1px solid var(--line);margin-left:6px}
@@ -149,7 +143,7 @@ body.drag #empty .box,body.drag #mapwrap{outline:3px dashed var(--acc);outline-o
   <button class="btn hide-narrow" id="devBtn" title="Открыть заезды с подключённого Garmin / Wahoo" style="display:none"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M9 6h6M12 18h.01"/></svg>С велокомпьютера</button>
   <div class="sp"></div>
   <div class="seg" id="viewSeg"><button data-v="after" class="on">Исправлено</button><button data-v="before">Исходник</button><button data-v="compare" title="Шторка: слева исправленный трек, справа исходный">Сравнить</button></div>
-  <button class="btn" id="editBtn" title="Тянуть трек мышью, срезать петли, перерисовать куски (beta)" style="margin-left:6px">✎ Править трек</button>
+  <button class="btn" id="editBtn" title="Тянуть трек мышью, дорисовать пропуски, перерисовать куски" style="margin-left:6px">✎ Править трек</button>
   <div class="sp"></div>
   <button class="btn hide-narrow" id="mergeBtn" disabled title="Склеить все загруженные FIT в одну тренировку">Склеить</button>
   <button class="btn hide-narrow" id="pngBtn" disabled title="Сохранить картинку карты с треком">PNG</button>
@@ -169,13 +163,19 @@ body.drag #empty .box,body.drag #mapwrap{outline:3px dashed var(--acc);outline-o
       <div class="fl card zoom" style="right:12px;bottom:14px"><button id="zin" title="Приблизить">＋</button><button id="zout" title="Отдалить">－</button><button id="zfit" title="Весь трек">⤢</button></div>
       <div class="fl card" style="left:12px;bottom:14px;flex-direction:column;align-items:flex-start;gap:0"><div class="lg" id="legend"><span>—</span><i></i><span>—</span></div><div class="lg" id="legend2" style="padding-top:0;display:none"></div></div>
       <div id="teBar" class="card" style="position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:3;display:none;align-items:center;gap:8px;padding:6px 8px;font-size:12.5px;white-space:nowrap">
-        <b style="padding:0 4px">✎ Правка трека <span class="mute" style="font-weight:500">beta</span></b>
-        <div class="seg sm" id="teTool"><button data-t="drag" class="on" title="Тянуть трек кистью (D)">Тянуть</button><button data-t="select" title="Выделить кусок протяжкой (S)">Выделить</button><button data-t="erase" title="Стирать точки кистью (E)">Ластик</button></div>
+        <b style="padding:0 4px">✎ Правка трека</b>
+        <div class="seg sm" id="teTool"><button data-t="drag" class="on" title="Тянуть трек кистью (D)">Тянуть</button><button data-t="select" title="Выделить кусок протяжкой (S)">Выделить</button><button data-t="erase" title="Стирать точки кистью (E)">Ластик</button><button data-t="draw" title="Дорисовать пропуск GPS или перерисовать выделенный кусок по точкам (N)">Дорисовать</button></div>
         <span id="teRadius" class="mute" title="Shift+колёсико или [ ] — изменить">кисть <b id="teR"></b></span>
-        <span id="teSelOps" style="display:none;gap:6px"><button class="btn sm" data-op="snap" title="Притянуть к ближайшим дорогам (G)">К дороге</button><button class="btn sm" data-op="road" title="Проложить по дорогам от начала до конца (R)">По дорогам</button><button class="btn sm" data-op="line" title="Прямой линией (L)">Прямо</button><button class="btn sm" data-op="redraw">Перерисовать</button><button class="btn sm" data-op="erase" title="Del">Стереть</button></span>
+        <span id="teSelOps" style="display:none;gap:6px"><button class="btn sm" data-op="snap" title="Притянуть к ближайшим дорогам (G)">К дороге</button><button class="btn sm" data-op="road" title="Проложить по дорогам от начала до конца (R)">По дорогам</button><button class="btn sm" data-op="line" title="Прямой линией (L)">Прямо</button><button class="btn sm" data-op="redraw" title="Нарисовать этот кусок заново по точкам (N)">Перерисовать</button><button class="btn sm" data-op="erase" title="Del">Стереть</button></span>
         <span id="teBusy" class="mute" style="display:none">прокладываю…</span>
         <button class="btn sm" id="teSnapAll" title="Притянуть к дорогам весь трек">Весь трек к дорогам</button>
         <button class="btn sm" id="teUndo" title="Отменить (Ctrl+Z)">↶</button><button class="btn sm" id="teRedo" title="Повторить (Ctrl+Y)">↷</button><button class="btn sm" id="teCancel">Отмена</button><button class="btn sm p" id="teDone">Готово</button>
+      </div>
+      <div id="teDraw" class="card" style="position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:3;display:none;align-items:center;gap:8px;padding:6px 8px;font-size:12.5px;white-space:nowrap">
+        <b style="padding:0 4px">✎ Дорисовать</b>
+        <div class="seg sm" id="teDMode"><button data-m="free" title="По дорогам и тротуарам, в обе стороны односторонних улиц">По дорогам · без ПДД</button><button data-m="rules" title="Как велосипед по правилам">По ПДД</button><button data-m="line" title="Прямыми отрезками — поля, дворы, тропинки">Прямо</button></div>
+        <span id="teDBusy" class="mute" style="display:none">прокладываю…</span>
+        <button class="btn sm" id="teDUndo" title="Убрать последнюю точку (Backspace)">↶ точку</button><button class="btn sm" id="teDCancel" title="Esc">Отмена</button><button class="btn sm p" id="teDDone" title="Enter">Готово</button>
       </div>
       <div id="teHintBox" class="card" style="position:absolute;left:50%;top:58px;transform:translateX(-50%);z-index:3;padding:4px 10px;font-size:12px;display:none;text-align:center"><span id="teHint" class="mute"></span><div id="teStat" style="font-size:11.5px;margin-top:2px"></div></div>
       <div id="teIssues" class="card" style="position:absolute;left:12px;top:12px;z-index:3;display:none;flex-direction:column;gap:6px;padding:8px 10px;font-size:12px;max-width:260px">
@@ -204,6 +204,7 @@ body.drag #empty .box,body.drag #mapwrap{outline:3px dashed var(--acc);outline-o
   <aside class="side" id="side">
     <div class="hero"><div class="t">Дистанция</div><div class="d num" id="heroD">—</div><div id="heroPill"></div></div>
     <div class="tiles num" id="tiles"></div>
+    <div id="strava"></div>
     <div class="sec"><div class="sh">Исправления · <span id="fixN">0</span><span class="sp"></span><button class="lnk r" id="chkBtn"></button></div>
       <div class="chk" id="chk"></div><div class="fx" id="fixes"></div><div class="gaps" id="gaps"></div></div>
     <div class="sec" id="pwSec"><div class="sh">Мощность<span class="sp"></span><button class="lnk r" id="ftpBtn"></button></div><div class="pw num" id="pw"></div></div>
@@ -251,26 +252,6 @@ body.drag #empty .box,body.drag #mapwrap{outline:3px dashed var(--acc);outline-o
   <div class="devlist" id="devList"></div>
   <div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn" id="devRefresh">Обновить</button><button class="btn" id="devClose">Закрыть</button><button class="btn p" id="devOpen" disabled>Открыть выбранные</button></div>
 </div></div>
-<div id="ed" class="notr-skip">
-  <div class="edtop">
-    <div class="edt"><b id="edTitle">Дорисовать участок</b><span class="mute num" id="edSub"></span></div>
-    <div class="edcnt num" id="edCnt"></div>
-    <div class="sp"></div>
-    <div class="seg" id="edMode"><button data-m="free" title="По дорогам и тротуарам, в обе стороны односторонних улиц">По дорогам · без ПДД</button><button data-m="rules" title="Как велосипед по правилам">По ПДД</button><button data-m="line" title="Прямыми отрезками — поля, дворы, тропинки">Прямо</button></div>
-    <input type="checkbox" id="edMagnet" checked hidden>
-    <button class="btn" id="edUndo" title="Отменить (Ctrl+Z)">↶ Отменить</button>
-    <button class="btn" id="edClear" title="Начать заново" hidden>Сбросить</button>
-    <button class="btn" id="edCancel">Отмена</button>
-    <button class="btn" id="edPart" title="Сохранить нарисованное до последней точки, остаток пропуска дорисовать потом" style="display:none">Сохранить часть</button>
-    <button class="btn p" id="edDone">Готово</button>
-  </div>
-  <div class="edmap"><canvas id="edCv"></canvas>
-    <div class="fl" style="right:12px;top:12px"><div class="seg" id="edTiles"><button data-t="map">Карта</button><button data-t="sat">Спутник</button></div></div>
-    <div class="fl card zoom" style="right:12px;bottom:14px"><button id="edZin">＋</button><button id="edZout">－</button><button id="edZfit" title="Весь участок">⤢</button></div>
-    <div class="edhint card" id="edHint"></div>
-    <div class="edbusy" id="edBusy">прокладываю…</div><div class="edbusy" id="edRoads" style="top:48px"></div>
-  </div>
-</div>
 <div id="toast"></div>
 <script>
 /*CORE*/
@@ -320,8 +301,13 @@ async function addFiles(list) {
   if (gpxAdded) for (const f of S.files) f.res = null;
   if (firstNew) S.cur = firstNew.id;
   if (!S.files.length) { toast(gpxAdded ? 'GPX маршрута без времени добавлен как эталон. Теперь откройте тренировку (FIT или GPX).' : 'Нужен файл .fit или .gpx'); return; }
+  // the same file was edited before — bring the edits back
+  const fresh = S.files.filter(f => [...list].some(x => x.name === f.name) && !(f.edits || []).length && !f.trim); let nRest = 0; const restored = [];
+  for (const f of fresh) { const n = await restoreFileEdits(f); if (n) { nRest += n; restored.push(f); } }
   showCurrent(true);
-  if (gpxAdded && !firstNew) toast('GPX маршрута добавлен — пропуски пересчитаны');
+  if (nRest) toastAct(VF_I18N.lang === 'en' ? `Your earlier edits to this file are back (${nRest}).` : `Ваши прошлые правки этого файла восстановлены (${nRest}).`,
+    [[VF_I18N.lang === 'en' ? 'Start without them' : 'Начать без них', () => { pushHist(); for (const f of restored) { f.edits = []; f.trim = null; f.res = null; } showCurrent(true); }]]);
+  else if (gpxAdded && !firstNew) toast('GPX маршрута добавлен — пропуски пересчитаны');
   else suggestMerge(S.files.filter(f => !f.src && !f.merged && [...list].some(x => x.name === f.name)));
 }
 // несколько FIT одного заезда (велокомпьютер разбил запись) — предлагаем склеить
@@ -347,6 +333,21 @@ function saveSession() { clearTimeout(sessT); sessT = setTimeout(async () => {
   try { const data = { at: Date.now(), cur: S.files.findIndex(f => f.id === S.cur), gpx: S.gpx.map(g => ({ name: g.name, pts: g.pts, nTime: g.nTime, creator: g.creator })),
     files: S.files.map(f => ({ name: f.name, bytes: f.bytes, edits: f.edits || [], trim: f.trim || null, merged: !!f.merged, src: f.src || null })) };
     await idb('readwrite', st => data.files.length ? st.put(data, 'session') : st.delete('session')); } catch (e) {} }, 800); }
+// ---- each file remembers its edits: open the same FIT again (any day, any session) and the work is there
+const fpOf = f => { const b = f.bytes; let h = 2166136261; for (let i = 0; i < b.length; i += 61) { h ^= b[i]; h = Math.imul(h, 16777619) >>> 0; } return f.name + ':' + b.length + ':' + h.toString(36); };
+let feT = 0;
+function saveFileEdits() { clearTimeout(feT); feT = setTimeout(async () => {
+  try { await idb('readwrite', st => { for (const f of S.files) { if (!f.bytes) continue; const k = 'fe:' + fpOf(f);
+    if ((f.edits && f.edits.length) || f.trim) st.put({ at: Date.now(), edits: f.edits || [], trim: f.trim || null }, k); else st.delete(k); } }); } catch (e) {} }, 800); }
+async function restoreFileEdits(f) {
+  let d = null; try { d = await idb('readonly', st => st.get('fe:' + fpOf(f))); } catch (e) {}
+  if (!d || (!(d.edits || []).length && !d.trim)) return 0;
+  f.edits = d.edits || []; f.trim = d.trim || null; f.res = null; return f.edits.length + (f.trim ? 1 : 0);
+}
+function toastAct(msg, btns, ms = 15000) { const t = $('toast'); clearTimeout(toast.t);
+  t.innerHTML = esc(msg) + ' ' + btns.map((b, k) => `<button class="btn sm" data-ta="${k}">${esc(b[0])}</button>`).join(' '); t.style.display = 'block';
+  t.querySelectorAll('[data-ta]').forEach(el => el.onclick = () => { t.style.display = 'none'; btns[+el.dataset.ta][1](); });
+  toast.t = setTimeout(() => t.style.display = 'none', ms); }
 async function offerSession() {
   let d = null; try { d = await idb('readonly', st => st.get('session')); } catch (e) {}
   if (!d || !d.files || !d.files.length || S.files.length) return;
@@ -360,7 +361,7 @@ async function offerSession() {
 }
 addEventListener('keydown', e => {
   if (e.target.closest && e.target.closest('input,textarea')) return;
-  if ($('ed').classList.contains('open') || TE.on || document.querySelector('.modal.open')) return;
+  if (TE.on || document.querySelector('.modal.open')) return;
   const k = e.key.toLowerCase(), c = e.ctrlKey || e.metaKey;
   if (c && (k === 'o' || k === 'щ')) { e.preventDefault(); $('inp').click(); }
   else if (c && (k === 's' || k === 'ы')) { e.preventDefault(); if (!$('saveBtn').disabled) $('saveBtn').click(); }
@@ -372,7 +373,7 @@ function pushHist() { HIST.push({ cur: S.cur, files: S.files.map(f => ({ ...f, r
 function popHist() { const h = HIST.pop(); if (!h) return; S.files = h.files; S.cur = h.cur; $('histBtn').disabled = !HIST.length; showCurrent(true); toast(VF_I18N.tr('Отменено')); }
 $('histBtn').onclick = popHist;
 function showCurrent(fit) {
-  saveSession();
+  saveSession(); saveFileEdits();
   const f = cur(); S.sel = null; S.fixSel = null; M.hover = null;
   $('empty').style.display = f ? 'none' : 'grid'; $('side').style.visibility = f && !f.err ? 'visible' : 'hidden';
   for (const id of ['saveBtn', 'saveMenuBtn', 'pngBtn', 'fileBtn']) $(id).disabled = !f;
@@ -505,6 +506,7 @@ function renderSide() {
     st.hasP ? tile('Мощность', Math.round(st.pAvg) + ' <small style="font-size:11px;font-weight:500">Вт</small>', `<em>NP ${st.np ? Math.round(st.np) : '—'}</em>`)
             : tile('Каденс', st.cad ? Math.round(st.cad) : '—', '<em>об/мин</em>')];
   $('tiles').innerHTML = tiles.join('');
+  renderStrava(f);
   // fixes
   const fx = fixList(r); $('fixN').textContent = fx.length;
   const col = s => s === 'bad' ? 'var(--bad)' : s === 'warn' ? 'var(--warn)' : s === 'acc' ? 'var(--acc)' : 'var(--mute)';
@@ -544,6 +546,28 @@ function renderSide() {
   $('hrBtn').textContent = `макс. ${st.hrMaxCfg} ▾`;
   $('zones').innerHTML = st.hrAvg ? st.hz.map((v, k) => `<div class="z num"><span>Z${k + 1}</span><span class="mute">${zn[k][0]}</span><div class="zb"><i style="width:${v / zmax * 100}%;background:${zn[k][1]}"></i></div><span>${Math.round(v / 60)}′</span><span class="mute">${Math.round(v / ztot * 100)}%</span></div>`).join('')
     : '<div class="mute" style="padding:0 18px">Нет данных пульса</div>';
+}
+// ---- «готово для Strava»: what Strava would reject, before the file leaves the program
+const stravaIssues = f => { if (!f || !f.res) return []; if (f.sc && f.sc.res === f.res) return f.sc.list; const list = VF.stravaCheck(f.res); f.sc = { res: f.res, list }; return list; };
+function renderStrava(f) {
+  const L = stravaIssues(f).filter(x => x.level !== 'info'), el = $('strava'), bad = L.filter(x => x.level === 'bad').length;
+  if (!L.length) { el.innerHTML = `<div class="sc ok">✓ ${VF_I18N.tr('Готово для Strava')}</div>`; return; }
+  el.innerHTML = `<div class="sc ${bad ? 'bad' : 'warn'}"><div><b>${bad ? '⚠ ' + VF_I18N.tr('Strava отклонит участки') : VF_I18N.tr('Проверка для Strava')}</b> · ${L.length}</div>
+    ${L.map((x, k) => `<div class="sci"><i style="background:${x.level === 'bad' ? 'var(--bad)' : 'var(--warn)'}"></i><span>${esc(VF_I18N.tr(x.txt))}</span><button class="lnk" data-sv="${k}">${VF_I18N.tr('Показать')}</button><button class="lnk" data-se="${k}">${VF_I18N.tr('Править')}</button></div>`).join('')}</div>`;
+  el.querySelectorAll('[data-sv]').forEach(b => b.onclick = () => { const x = L[+b.dataset.sv]; setView('after'); M.hl = x; M.fitRange(Math.max(0, x.a - 20), Math.min(f.res.N - 1, x.b + 20)); });
+  el.querySelectorAll('[data-se]').forEach(b => b.onclick = () => { const x = L[+b.dataset.se];
+    if (x.type === 'nogps') return teDrawStart(x.a, x.b);
+    teStart(); TE.tool = 'select'; TE.sel = [x.a, x.b]; M.fitRange(Math.max(0, x.a - 20), Math.min(f.res.N - 1, x.b + 20)); teUi(); M.draw();
+    toast(VF_I18N.tr('Участок выделен — «Перерисовать» по точкам, «По дорогам» или поправьте точки'), 7000); });
+}
+// before saving: say plainly what Strava will do with the file
+function stravaGate(files) {
+  const bad = files.map(f => [f, stravaIssues(f).filter(x => x.level === 'bad')]).filter(([, l]) => l.length);
+  if (!bad.length) return true;
+  const en = VF_I18N.lang === 'en', vm = VF.amax(bad.flatMap(([, l]) => l.map(x => x.vmax || 0)));
+  const msg = en ? `${bad.map(([f, l]) => `${f.name}: ${l.length} place(s)`).join('\n')}\n\nThe track moves faster than the bike${vm ? ' (up to ' + vm + ' km/h)' : ''} — Strava will exclude the segments there. Usually a drawn line was squeezed into too short a stretch.\n\nSave anyway?`
+    : `${bad.map(([f, l]) => `${f.name}: мест — ${l.length}`).join('\n')}\n\nТрек «едет» быстрее велосипеда${vm ? ' (до ' + vm + ' км/ч)' : ''} — Strava исключит там участки. Обычно это нарисованная линия, уложенная в слишком короткий кусок. Найти и поправить — блок «Strava отклонит участки» справа.\n\nВсё равно сохранить?`;
+  return confirm(msg);
 }
 $('chkBtn').onclick = () => $('chk').classList.toggle('open');
 const openSettings = () => { const st = cur() && cur().stats;
@@ -814,8 +838,15 @@ function renderSegStat() {
 // ================= saving =================
 const canPick = typeof window.showDirectoryPicker === 'function';
 let dirHandle = null;
-const idb = (mode, fn) => new Promise((res, rej) => { try { const o = indexedDB.open('velofix', 1); o.onupgradeneeded = () => o.result.createObjectStore('kv');
-  o.onsuccess = () => { const tx = o.result.transaction('kv', mode), st = tx.objectStore('kv'); const r = fn(st); tx.oncomplete = () => res(r && r.result); tx.onerror = () => rej(tx.error); }; o.onerror = () => rej(o.error); } catch (e) { rej(e); } });
+// storage may be missing or hang (private window, blocked site data): never let it stall the program — give up after 3 s and stop asking
+let IDB_OFF = false;
+const idb = (mode, fn) => IDB_OFF ? Promise.reject(new Error('storage unavailable')) : new Promise((res0, rej0) => {
+  const tm = setTimeout(() => { IDB_OFF = true; rej0(new Error('storage timeout')); }, 3000);
+  const res = v => { clearTimeout(tm); res0(v); }, rej = e => { clearTimeout(tm); rej0(e); };
+  try { const o = indexedDB.open('velofix', 1); o.onupgradeneeded = () => o.result.createObjectStore('kv');
+    o.onsuccess = () => { const db = o.result, tx = db.transaction('kv', mode), st = tx.objectStore('kv'); const r = fn(st);
+      tx.oncomplete = () => { db.close(); res(r && r.result); }; tx.onerror = tx.onabort = () => { db.close(); rej(tx.error); }; };
+    o.onerror = () => rej(o.error); } catch (e) { rej(e); } });
 (async () => { try { dirHandle = await idb('readonly', st => st.get('dir')) || null; } catch (e) {} renderSaveTo(); })();
 function renderSaveTo() { $('saveTo').innerHTML = !canPick ? 'в «Загрузки»' : dirHandle ? `в папку <b>${esc(dirHandle.name)}</b>` : 'спрашивать, куда'; }
 async function pickDir() { try { dirHandle = await showDirectoryPicker({ id: 'velofix-out', mode: 'readwrite' }); try { await idb('readwrite', st => st.put(dirHandle, 'dir')); } catch (e) {} renderSaveTo(); toast('Папка для сохранения: ' + dirHandle.name); return true; } catch (e) { return false; } }
@@ -835,7 +866,7 @@ const outputs = f => { const enc = new TextEncoder(), b = baseName(f), r = f.res
   fit: [b + '_RESTORED.fit', r.out, 'application/octet-stream'], gpx: [b + '_RESTORED.gpx', enc.encode(VF.toGpx(r)), 'application/gpx+xml'],
   tcx: [b + '_RESTORED.tcx', enc.encode(VF.toTcx(r)), 'application/xml'],
   md: [b + '_REPORT.md', enc.encode(VF_I18N.tr(VF.toReport(r, f.name))), 'text/markdown'], csv: [b + '_AUDIT.csv', enc.encode(VF_I18N.tr(VF.toCsv(r))), 'text/csv'] }; };
-$('saveBtn').onclick = () => { const f = cur(); if (f && f.res) saveFile(...outputs(f)[f.src === 'gpx' ? 'gpx' : 'fit']); };
+$('saveBtn').onclick = () => { const f = cur(); if (f && f.res && stravaGate([f])) saveFile(...outputs(f)[f.src === 'gpx' ? 'gpx' : 'fit']); };
 $('saveMenuBtn').onclick = () => {
   const m = $('saveMenu'); const fits = S.files.length;
   m.innerHTML = `<div class="cap">Эта тренировка</div><button data-k="fit">FIT для Strava / Garmin</button><button data-k="gpx">GPX — трек для других сервисов</button><button data-k="tcx">TCX — для TrainingPeaks, Polar и др.</button><button data-k="png">PNG — картинка карты</button><button data-k="ba">PNG — «до и после» рядом</button><button data-k="html">Отчёт «до и после» (.html)</button><button data-k="strava">Описание для Strava (скопировать)</button><button data-k="md">Отчёт об исправлениях (.md)</button><button data-k="csv">Таблица изменений (.csv)</button><button data-k="zip">Всё архивом (.zip)</button>
@@ -850,6 +881,7 @@ $('saveMenuBtn').onclick = () => {
     if (k === 'dir') return pickDir(); if (k === 'ask') return forgetDir();
     if (k === 'all') return saveAll();
     if (k === 'batch') return batchFolder();
+    if (['fit', 'gpx', 'tcx', 'zip'].includes(k) && !stravaGate([f])) return;
     const o = outputs(f);
     if (k === 'zip') { // everything: FIT, GPX, TCX, reports, map picture, Strava description
       toast(VF_I18N.tr('Собираю архив…'), 20000);
@@ -870,7 +902,7 @@ async function batchFolder() {
   if (!fits.length) { toast(en ? 'No .fit files in this folder' : 'В этой папке нет файлов .fit'); return; }
   const refs = []; for (const h of gpx) { try { refs.push(VF.parseGpx(await (await h.getFile()).text(), h.name)); } catch (e) {} }
   const out = await dir.getDirectoryHandle('VELO_FIX', { create: true });
-  const rows = [['file', en ? 'km before' : 'км до', en ? 'km after' : 'км после', en ? 'max before' : 'макс. до', en ? 'max after' : 'макс. после', en ? 'fixes' : 'исправлений', en ? 'GPS gaps left' : 'пропусков GPS', en ? 'result' : 'итог'].join(';')];
+  const rows = [['file', en ? 'km before' : 'км до', en ? 'km after' : 'км после', en ? 'max before' : 'макс. до', en ? 'max after' : 'макс. после', en ? 'fixes' : 'исправлений', en ? 'GPS gaps left' : 'пропусков GPS', 'Strava', en ? 'result' : 'итог'].join(';')];
   let ok = 0;
   for (let k = 0; k < fits.length; k++) { const h = fits[k];
     toast(`${en ? 'Fixing' : 'Исправляю'} ${k + 1}/${fits.length}: ${h.name}`, 60000);
@@ -878,14 +910,16 @@ async function batchFolder() {
       const fh = await out.getFileHandle(h.name.replace(/\.fit$/i, '') + '_RESTORED.fit', { create: true }); const w = await fh.createWritable(); await w.write(r.out); await w.close();
       const nfix = r.phantomBlocks.length + r.jumps.length + (Object.keys(r.badReason).length ? 1 : 0) + r.dups.length + r.sensorFix.hr.length + r.sensorFix.pwr.length;
       const gaps = r.unfilled.filter(u => u.n > 15).length;
-      rows.push([h.name, fmt(r.before.dist / 1000, 2), fmt(r.after.dist / 1000, 2), fmt(r.before.max, 1), fmt(r.after.max, 1), nfix, gaps, nfix ? (en ? 'fixed' : 'исправлено') : (en ? 'OK' : 'в порядке')].join(';')); ok++;
-    } catch (e) { rows.push([h.name, '', '', '', '', '', '', (en ? 'error: ' : 'ошибка: ') + VF_I18N.tr(e.message || String(e))].join(';')); } }
+      const sbad = VF.stravaCheck(r).filter(x => x.level === 'bad').length;
+      rows.push([h.name, fmt(r.before.dist / 1000, 2), fmt(r.after.dist / 1000, 2), fmt(r.before.max, 1), fmt(r.after.max, 1), nfix, gaps, sbad ? (en ? `${sbad} problem(s)` : `проблем: ${sbad}`) : 'OK', nfix ? (en ? 'fixed' : 'исправлено') : (en ? 'OK' : 'в порядке')].join(';')); ok++;
+    } catch (e) { rows.push([h.name, '', '', '', '', '', '', '', (en ? 'error: ' : 'ошибка: ') + VF_I18N.tr(e.message || String(e))].join(';')); } }
   try { const sh = await out.getFileHandle(en ? 'summary.csv' : 'сводка.csv', { create: true }); const w = await sh.createWritable(); await w.write('\ufeff' + rows.join('\r\n')); await w.close(); } catch (e) {}
   toast(en ? `Done: ${ok} of ${fits.length} files → folder VELO_FIX (summary.csv inside)` : `Готово: ${ok} из ${fits.length} файлов → папка VELO_FIX внутри выбранной (там же сводка.csv)`, 9000);
 }
 async function saveAll() {
   for (const f of S.files) process(f);
   const ok = S.files.filter(f => f.res);
+  if (!stravaGate(ok)) return;
   if (!dirHandle && canPick) { if (!(await pickDir())) return; }
   if (dirHandle) { let n = 0; for (const f of ok) { try { const [name, d] = outputs(f).fit; await writeToDir(name, new Blob([d])); n++; } catch (e) { toast('Ошибка: ' + e.message); return; } } toast(`Сохранено тренировок: ${n} → ${dirHandle.name}`); return; }
   saveFile('VELO_FIX_тренировки.zip', VF.zip(ok.map(f => { const [name, d] = outputs(f).fit; return { name, data: d }; })), 'application/zip');
@@ -1085,7 +1119,7 @@ const APP_VERSION = '/*VERSION*/', REPO = 'denbogos/velo-fix';
     if (info && info.v && newer(info.v, APP_VERSION)) { const u = $('upd'); u.href = info.url; u.textContent = IS_APP ? `Обновить до ${info.v}` : `Доступна версия ${info.v} ↗`; u.title = info.notes || 'Скачать новую версию'; u.classList.add('on'); u.dataset.v = info.v; }
   } catch (e) { /* offline — silently ignore */ }
 })();
-// ================= route editor («Дорисовать участок») =================
+// ================= routing for «Дорисовать» (servers, magnet, local road map) =================
 const ROUTE_HOSTS = { osrm: 'https://routing.openstreetmap.de', brouter: 'https://brouter.de' };
 const routeCache = new Map();
 // routing servers can be unreachable (blocked / very slow from some networks): never wait more than a few seconds
@@ -1102,8 +1136,9 @@ async function fetchJson(u) {
 const ROADPX = (r, g, b) => (r > 246 && g > 246 && b > 246) || (r > 240 && g > 240 && b > 180 && b < 215) || (r > 245 && g > 200 && g < 225 && b > 150 && b < 175) || (r > 240 && g > 160 && g < 190 && b > 140 && b < 170) || (r > 215 && r < 240 && g > 135 && g < 160 && b > 150 && b < 175) || (r > 215 && r < 230 && g > 215 && g < 230 && b > 225 && b < 240);
 function magnet(x, y) {
   if (!store.get('edMagnet', true)) return null;
-  if (ROADS.nodes.size) { const p = edLL(x, y), m = 18 * 40075016 * Math.cos(p.lat * Math.PI / 180) / (256 * 2 ** ED.z), ne = nearestEdge(p.lat, p.lon, m); if (ne) return edScr(ne.lat, ne.lon); }
-  if (ED.tiles !== 'map' || ED.z < 14) return null;
+  const ED = M;   // the main map (the separate «Дорисовать» window is gone since 3.0)
+  if (ROADS.nodes.size) { const p = llOf(x, y), m = 18 * 40075016 * Math.cos(p.lat * Math.PI / 180) / (256 * 2 ** ED.z), ne = nearestEdge(p.lat, p.lon, m); if (ne) return M.scr(ne.lat, ne.lon); }
+  if (S.tiles !== 'map' || ED.z < 14) return null;
   const R = 14, W = 2 * R + 1, cv = document.createElement('canvas'); cv.width = W; cv.height = W; const ctx = cv.getContext('2d', { willReadFrequently: true });
   const tz = Math.min(ED.z, 19), n = 2 ** tz, gx = ED.cx - ED.w / 2 + x, gy = ED.cy - ED.h / 2 + y;
   for (let tx = Math.floor((gx - R) / TILE); tx <= Math.floor((gx + R) / TILE); tx++) for (let ty = Math.floor((gy - R) / TILE); ty <= Math.floor((gy + R) / TILE); ty++) {
@@ -1385,242 +1420,6 @@ async function routeLeg(a, b, mode) {
   pts = [a, ...pts, b];   // exact click points at both ends
   routeCache.set(k, pts); return pts;
 }
-const ED = { open: false, z: 14, cx: 0, cy: 0, w: 0, h: 0, raf: 0, mode: store.get('edMode', 'free'), tiles: store.get('edTiles', 'map') === 'sat' ? 'sat' : 'map' };
-const edCv = $('edCv');
-const edScr = (lat, lon) => [wx(lon, ED.z) - ED.cx + ED.w / 2, wy(lat, ED.z) - ED.cy + ED.h / 2];
-const edLL = (x, y) => ({ lat: latOf(ED.cy + y - ED.h / 2, ED.z), lon: lonOf(ED.cx + x - ED.w / 2, ED.z) });
-function edDraw() { if (ED.raf) return; ED.raf = requestAnimationFrame(() => { ED.raf = 0; edPaint(); }); }
-function edResize() { const b = edCv.getBoundingClientRect(), d = devicePixelRatio || 1; ED.w = b.width; ED.h = b.height; edCv.width = Math.round(b.width * d); edCv.height = Math.round(b.height * d); edDraw(); }
-function edFit() {
-  if (ED.w < 200 || ED.h < 200) { edResize(); if (ED.w < 200 || ED.h < 200) { if ((edFit.tries = (edFit.tries || 0) + 1) < 30) requestAnimationFrame(edFit); return; } } edFit.tries = 0;   // the pane is not laid out yet
-  const r = ED.r, pts = [...ED.wp]; if (ED.Bpt) pts.push(ED.Bpt);
-  for (const g of ED.legs) if (g) pts.push(...g);
-  // only the section itself: its ends and what is drawn (never the whole ride)
-  for (const i of [ED.A, ED.B]) { const p = r.R[i]; if (p && p.lat != null && !r.badReason[i]) pts.push(p); }
-  if (!pts.length) { const p = r.newLL[ED.A].lat != null ? r.newLL[ED.A] : r.newLL[ED.B]; if (p && p.lat != null) pts.push(p); }
-  if (!pts.length) return; let s = 90, n = -90, w = 180, e = -180; for (const p of pts) { s = Math.min(s, p.lat); n = Math.max(n, p.lat); w = Math.min(w, p.lon); e = Math.max(e, p.lon); }
-  // start not drawn yet: show the area it can be in (a straight line from B is at most the sensor distance; usually ~half)
-  if (ED.noA && !ED.wp.length && ED.Bpt) { const R = Math.min(8000, Math.max(800, (ED.target || 3000) * 0.5)), dl = R / 110540, dw = R / (111320 * Math.cos(ED.Bpt.lat * Math.PI / 180)); s -= dl; n += dl; w -= dw; e += dw; }
-  if (n - s < 0.004) { s -= 0.002; n += 0.002; } if (e - w < 0.006) { w -= 0.003; e += 0.003; }
-  const fb = M.fitBox({ s, n, w, e }, ED.w, ED.h, 120, 17), z = fb.z;
-  ED.z = z; ED.cx = (wx(w, z) + wx(e, z)) / 2; ED.cy = (wy(s, z) + wy(n, z)) / 2; edDraw();
-}
-function edPaint() {
-  const ctx = edCv.getContext('2d'), d = devicePixelRatio || 1; ctx.setTransform(d, 0, 0, d, 0, 0);
-  ctx.fillStyle = cssv('--map'); ctx.fillRect(0, 0, ED.w, ED.h);
-  const tz = Math.min(ED.z, 19), n = 2 ** tz;
-  { const x0 = Math.floor((ED.cx - ED.w / 2) / TILE), x1 = Math.floor((ED.cx + ED.w / 2) / TILE), y0 = Math.floor((ED.cy - ED.h / 2) / TILE), y1 = Math.floor((ED.cy + ED.h / 2) / TILE);
-    for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) { if (y < 0 || y >= n) continue; const im = M.tile(ED.tiles, tz, ((x % n) + n) % n, y, edDraw); if (im.ok) ctx.drawImage(im, x * TILE - ED.cx + ED.w / 2, y * TILE - ED.cy + ED.h / 2, TILE, TILE); } }
-  if (isDark() && ED.tiles === 'map') { ctx.fillStyle = 'rgba(14,16,19,.42)'; ctx.fillRect(0, 0, ED.w, ED.h); }
-  const r = ED.r; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  const line = (col, w) => { ctx.beginPath(); let st = false; for (let i = 0; i < r.N; i++) { if (r.trimmed && r.trimmed[i]) continue; const p = r.R[i]; if (p.lat == null || r.badReason[i] || (!ED.pick && !ED.join && i > ED.A && i < ED.B)) { st = false; continue; } const q = edScr(p.lat, p.lon); st ? ctx.lineTo(...q) : ctx.moveTo(...q); st = true; } ctx.strokeStyle = col; ctx.lineWidth = w; ctx.stroke(); };
-  line('rgba(255,255,255,.95)', 9); line('#2563eb', 5);
-  // drawn route
-  ctx.strokeStyle = isDark() ? 'rgba(0,0,0,.6)' : 'rgba(255,255,255,.95)'; ctx.lineWidth = 8; ctx.beginPath();
-  ED.legs.forEach(g => { if (!g) return; g.forEach((p, k) => { const q = edScr(p.lat, p.lon); k ? ctx.lineTo(...q) : ctx.moveTo(...q); }); }); ctx.stroke();
-  ED.legs.forEach((g, i) => { const a = ED.wp[i], b = ED.wp[i + 1]; if (!a || !b) return; ctx.beginPath();
-    if (!g) { ctx.setLineDash([2, 7]); ctx.strokeStyle = 'rgba(128,128,128,.8)'; ctx.lineWidth = 2.5; ctx.moveTo(...edScr(a.lat, a.lon)); ctx.lineTo(...edScr(b.lat, b.lon)); }
-    else { ctx.setLineDash(b.mode === 'line' ? [9, 6] : []); ctx.strokeStyle = cssv('--acc'); ctx.lineWidth = 4.5; g.forEach((p, k) => { const q = edScr(p.lat, p.lon); k ? ctx.lineTo(...q) : ctx.moveTo(...q); }); }
-    ctx.stroke(); ctx.setLineDash([]); });
-  // preview: last point → B (connected automatically on «Готово») and → cursor
-  const last = ED.wp[ED.wp.length - 1];
-  if (last && ED.Bpt && !ED.pick) { ctx.beginPath(); ctx.setLineDash([2, 7]); ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 2.5; ctx.moveTo(...edScr(last.lat, last.lon)); ctx.lineTo(...edScr(ED.Bpt.lat, ED.Bpt.lon)); ctx.stroke(); ctx.setLineDash([]); }
-  if (last && ED.mouse && !ED.dragging && !ED.pick && ED.hot == null) { ctx.beginPath(); ctx.setLineDash([4, 5]); ctx.strokeStyle = cssv('--acc'); ctx.globalAlpha = .6; ctx.lineWidth = 2; ctx.moveTo(...edScr(last.lat, last.lon)); ctx.lineTo(...ED.mouse); ctx.stroke(); ctx.globalAlpha = 1; ctx.setLineDash([]); }
-  // points: small, like gpx.studio
-  const dot = (p, rad, fill, stroke, lw, label) => { const q = edScr(p.lat, p.lon); ctx.beginPath(); ctx.arc(q[0], q[1], rad, 0, 7); ctx.fillStyle = fill; ctx.fill(); ctx.lineWidth = lw; ctx.strokeStyle = stroke; ctx.stroke();
-    if (label) { ctx.fillStyle = '#fff'; ctx.font = '700 9px "Segoe UI",sans-serif'; ctx.textAlign = 'center'; ctx.fillText(label, q[0], q[1] + 3); ctx.textAlign = 'left'; } };
-  ED.wp.forEach((w, i) => { if (w.fixed || (i === 0 && ED.noA)) return; dot(w, i === ED.hot ? 5.5 : 4, '#fff', cssv('--acc'), 2); });
-  if (ED.wp[0] && (ED.wp[0].fixed || ED.noA)) dot(ED.wp[0], ED.noA && ED.hot === 0 ? 9 : 8, '#16a34a', '#fff', 2.5, 'A');
-  // no recorded start: the cursor shows where the start will be
-  if (ED.noA && !ED.wp.length && ED.mouse && !ED.dragging) { const [x, y] = ED.mouse; ctx.globalAlpha = .55; dot(edLL(x, y), 8, '#16a34a', '#fff', 2.5, 'A'); ctx.globalAlpha = 1;
-    if (ED.Bpt) { ctx.beginPath(); ctx.setLineDash([2, 7]); ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 2.5; ctx.moveTo(x, y); ctx.lineTo(...edScr(ED.Bpt.lat, ED.Bpt.lon)); ctx.stroke(); ctx.setLineDash([]); } }
-  if (ED.Bpt) dot(ED.Bpt, 8, '#dc2626', '#fff', 2.5, 'B');
-  if (ED.ins) { const q = ED.ins; ctx.beginPath(); ctx.arc(q[0], q[1], 4, 0, 7); ctx.fillStyle = cssv('--acc'); ctx.fill(); }
-  if (ED.pick && ED.pickHover != null) dot(r.R[ED.pickHover], 8, ED.pick === 'A' ? '#16a34a' : '#dc2626', '#fff', 3);
-  if (ED.pick && ED.pickA != null) dot(ED.pickAfree || r.R[ED.pickA], 8, '#16a34a', '#fff', 3, 'A');
-}
-const tLoc = t => new Date((t + VF.FIT_EPOCH + ED.r.tzOff) * 1000).toISOString().slice(11, 16);
-function edLen() { let L = 0; for (const g of ED.legs) if (g) for (let k = 1; k < g.length; k++) L += VF.hav(g[k - 1].lat, g[k - 1].lon, g[k].lat, g[k].lon); return L; }
-function edInfo() {
-  const r = ED.r;
-  document.querySelectorAll('#edMode button').forEach(b => b.classList.toggle('on', b.dataset.m === ED.mode));
-  document.querySelectorAll('#edTiles button').forEach(b => b.classList.toggle('on', b.dataset.t === ED.tiles));
-  if (ED.pick) { $('edTitle').textContent = 'Нарисовать участок вручную'; $('edSub').textContent = ''; $('edCnt').style.display = 'none';
-    $('edHint').innerHTML = '<b>Щёлкните по треку</b>, откуда начать рисовать'; $('edDone').disabled = true; return; }
-
-  $('edTitle').textContent = 'Дорисовать участок'; $('edSub').textContent = `${tLoc(r.R[ED.A].t)}–${tLoc(r.R[ED.B].t)} · ${hms(r.R[ED.B].t - r.R[ED.A].t)}`;
-  const last = ED.wp[ED.wp.length - 1], rest = last && ED.Bpt ? VF.hav(last.lat, last.lon, ED.Bpt.lat, ED.Bpt.lon) : 0;
-  const L = edLen(), T = ED.target, c = $('edCnt'); c.style.display = '';
-  const tot = L + rest;
-  c.className = 'edcnt num ' + (T && ED.wp.length > 1 ? (Math.abs(tot / T - 1) <= 0.08 ? 'ok' : 'far') : '');
-  c.innerHTML = `Нарисовано <b>${fmt(L / 1000, 2)}</b> км` + (T ? ` из <b>${fmt(T / 1000, 2)}</b> км по датчику` : '') + (ED.Bpt && rest > 30 ? ` · до B ${rest >= 1000 ? fmt(rest / 1000, 1) + ' км' : Math.round(rest) + ' м'}` : '');
-  $('edHint').innerHTML = ED.noA && !ED.wp.length ? (ED.Bpt ? '<b>Щёлкните, где начали поездку</b> — это старт A, дальше ставьте точки до B' : '<b>Щёлкните, где начали поездку</b> — это старт A')
-    : ED.noA && ED.wp.length === 1 ? '<b>Старт поставлен</b> — ставьте точки до B и нажмите «Готово» (старт можно перетащить)'
-    : !ED.wp.length || (ED.wp.length === 1 && ED.wp[0].fixed) ? '<b>Ставьте точки</b> по пути, где вы ехали' : ED.join ? '<b>Ставьте точки</b> · закончить — <b>щелчок по треку</b> или «Готово»' : ED.Bpt ? '<b>Ведите до точки B</b> и нажмите «Готово»' : '<b>Ставьте точки до финиша</b> и нажмите «Готово»';
-  $('edHint').title = 'Тащите точку — сдвинуть · тащите линию — вставить точку · правый клик — удалить · Ctrl+Z — отменить · A и B можно перетаскивать';
-  $('edDone').disabled = ED.legs.some(g => !g) || (ED.wp.length < 2 && !(ED.Bpt && ED.wp.length === 1 && (ED.wp[0].fixed || ED.noA)));
-  { const l = ED.wp[ED.wp.length - 1]; $('edPart').style.display = ED.Bpt && ED.wp.length >= 2 && l && VF.hav(l.lat, l.lon, ED.Bpt.lat, ED.Bpt.lon) > 50 ? '' : 'none'; $('edPart').disabled = ED.legs.some(g => !g); }
-}
-let edSeq = 0;
-async function edRoute() {
-  const my = ++edSeq, need = [];
-  ED.legs.length = Math.max(0, ED.wp.length - 1);
-  for (let i = 0; i < ED.wp.length - 1; i++) { const a = ED.wp[i], b = ED.wp[i + 1], k = `${b.mode}|${a.lat},${a.lon}|${b.lat},${b.lon}`; if (ED.legKey[i] !== k) { ED.legs[i] = null; ED.legKey[i] = k; need.push(i); } }
-  ED.legKey.length = ED.legs.length; edInfo(); edDraw();
-  if (!need.length) return;
-  $('edBusy').style.display = 'block'; let fail = 0;
-  await Promise.all(need.map(async i => { const a = ED.wp[i], b = ED.wp[i + 1], k = ED.legKey[i];
-    let g = await routeLeg(a, b, b.mode); if (!g) { fail++; g = [a, b]; } if (ED.legKey[i] === k) ED.legs[i] = g; }));
-  if (my === edSeq) $('edBusy').style.display = 'none';
-  edInfo(); edDraw();
-}
-function edSnap() { ED.undo.push(JSON.stringify(ED.wp)); if (ED.undo.length > 300) ED.undo.shift(); }
-function openEditor(f, A, B, existing, extend) {
-  const r = f.res; ED.f = f; ED.r = r; ED.join = false; ED.undo = []; ED.legs = []; ED.legKey = []; ED.hot = null; ED.pick = null; ED.pickA = null; ED.pickHover = null; ED.Bpt = null; ED.wp = []; ED.mouse = null; ED.ins = null;
-  $('ed').classList.add('open'); edResize();
-  if (A == null) { ED.pick = 'A'; ED.A = 0; ED.B = r.N - 1; Object.assign(ED, M.fitBox(M.bounds(), ED.w, ED.h, 60)); edInfo(); edDraw(); return; }
-  edStart(A, B, existing, null, extend);
-}
-function simplifyPts(pts, tol) { // Douglas–Peucker in metres
-  if (pts.length < 3) return pts.slice(); const k = Math.cos(pts[0].lat * Math.PI / 180), X = p => [p.lon * 111320 * k, p.lat * 110540];
-  const P = pts.map(X), keep = new Array(pts.length).fill(false); keep[0] = keep[pts.length - 1] = true; const st = [[0, pts.length - 1]];
-  while (st.length) { const [a, b] = st.pop(); let md = 0, mi = -1; const [ax, ay] = P[a], [bx, by] = P[b], dx = bx - ax, dy = by - ay, L = Math.hypot(dx, dy) || 1;
-    for (let i = a + 1; i < b; i++) { const d = Math.abs((P[i][0] - ax) * dy - (P[i][1] - ay) * dx) / L; if (d > md) { md = d; mi = i; } }
-    if (md > tol) { keep[mi] = true; st.push([a, mi], [mi, b]); } }
-  return pts.filter((p, i) => keep[i]);
-}
-function edStart(A, B, existing, freeStart, extend) {
-  const r = ED.r; ED.pick = null; ED.gapB = null;
-  if (false && extend && !existing) { // «Дорисовать»: the recorded track ~400 m before and after the gap is editable too
-    const ok = i => r.R[i].lat != null && !r.badReason[i], ka = r.ka ?? 0, kb = r.kb ?? r.N - 1, D = r.finalDist;
-    let a = A; while (a - 1 >= ka && ok(a - 1) && D[A] - D[a - 1] <= 400) a--;
-    let b = B; if (B < kb) { while (b + 1 <= kb && ok(b + 1) && D[b + 1] - D[B] <= 400) b++; }
-    ED.gapB = B; A = a; B = b; }
-  const has = i => r.R[i].lat != null && !r.badReason[i];
-  // a part saved earlier («Сохранить часть») ends inside the gap: continue to where GPS is back, otherwise the whole
-  // newly drawn line would be squeezed into the old short part (~4× speed, segments rejected by Strava)
-  if (!has(B) && !ED.join) { const kb = r.kb ?? r.N - 1; let b = B; while (b < kb && !has(b)) b++; if (has(b)) B = b; }
-  ED.A = A; ED.B = B; ED.legs = []; ED.legKey = [];
-  ED.target = r.hasDist && r.sensor ? r.finalDist[B] - r.finalDist[A] : null;
-  ED.Bpt = has(B) && !ED.join ? { lat: r.R[B].lat, lon: r.R[B].lon } : null;
-  if (existing && existing.wp) { ED.wp = existing.wp.map(w => ({ ...w })); if (ED.Bpt) { const l = ED.wp[ED.wp.length - 1]; if (l && l.fixed && ED.wp.length > 1) ED.wp.pop(); } }
-  else { const dA = !has(A) && r.newLL[A] && r.newLL[A].lat != null ? r.newLL[A] : null;   // A = end of a part drawn earlier
-    ED.wp = freeStart ? [{ lat: freeStart.lat, lon: freeStart.lon, fixed: false }] : has(A) ? [{ lat: r.R[A].lat, lon: r.R[A].lon, fixed: true }] : dA ? [{ lat: dA.lat, lon: dA.lon, fixed: true }] : []; }
-  ED.noA = !ED.wp.length && !has(A) && !ED.join;   // the ride starts without GPS: the first click is the start
-  // the section has a recorded track → put it into the editor as editable points (drag / delete / insert like in gpx.studio)
-  if (false) { const rec = []; for (let i = A + 1; i < B; i++) if (r.R[i].lat != null && !r.badReason[i]) rec.push({ lat: r.R[i].lat, lon: r.R[i].lon, idx: i });
-    if (rec.length >= 3) { const keep = simplifyPts(rec, 6); for (const p of keep) ED.wp.push({ lat: p.lat, lon: p.lon, fixed: false, mode: 'line', idx: p.idx }); if (ED.wp[0] && ED.wp[0].mode == null && ED.wp.length > 1 && !ED.wp[0].fixed) delete ED.wp[0].mode; } }
-  if (ED.join && ED.wp[0]) { const p = ED.wp[0]; ED.z = Math.max(ED.z, 15); ED.cx = wx(p.lon, ED.z); ED.cy = wy(p.lat, ED.z); edDraw(); } else edFit();
-  edRoute();
-  { const pts = [...ED.wp]; if (ED.Bpt) pts.push(ED.Bpt); if (!pts.length) pts.push(r.R[A]); const la = pts.map(p => p.lat), lo = pts.map(p => p.lon);
-    for (const p of pts) ensureCells(p.lat - 0.003, p.lon - 0.005, p.lat + 0.003, p.lon + 0.005, roadsProgress).then(ok => { if (!ok && !edRoute.mapWarn) { edRoute.mapWarn = true; toast('Карта дорог не загрузилась — проверьте интернет. Можно рисовать прямыми.', 6000); } }); }
-}
-function edClose() { $('ed').classList.remove('open'); }
-$('edCancel').onclick = () => { if (ED.wp && ED.wp.length > 2 && !confirm(VF_I18N.tr('Закрыть без сохранения нарисованного?'))) return; edClose(); };
-$('edUndo').onclick = () => { if (!ED.undo.length) return; ED.wp = JSON.parse(ED.undo.pop()); edRoute(); };
-$('edClear').onclick = () => { if (ED.pick || !ED.wp.length) return; edSnap(); ED.wp = ED.wp.filter(w => w.fixed); edRoute(); };
-document.querySelectorAll('#edMode button').forEach(b => b.onclick = () => { ED.mode = b.dataset.m; store.set('edMode', ED.mode); edInfo(); });
-document.querySelectorAll('#edTiles button').forEach(b => b.onclick = () => { ED.tiles = b.dataset.t; store.set('edTiles', ED.tiles); edInfo(); edDraw(); });
-store.set('edMagnet', true); $('edMagnet').checked = true; $('edMagnet').onchange = () => store.set('edMagnet', $('edMagnet').checked);
-$('edZin').onclick = () => edZoom(1, ED.w / 2, ED.h / 2); $('edZout').onclick = () => edZoom(-1, ED.w / 2, ED.h / 2); $('edZfit').onclick = () => edFit();
-function edZoom(dz, px, py) { const nz = Math.max(3, Math.min(19, ED.z + dz)); if (nz === ED.z) return; const p = edLL(px, py); ED.z = nz; ED.cx = wx(p.lon, nz) - (px - ED.w / 2); ED.cy = wy(p.lat, nz) - (py - ED.h / 2); edDraw(); }
-function edHitWp(x, y, R = 7) { let best = null, bd = R * R; ED.wp.forEach((w, i) => { if (w.fixed) return; const q = edScr(w.lat, w.lon), d = (q[0] - x) ** 2 + (q[1] - y) ** 2; if (d <= bd) { bd = d; best = i; } }); return best; }
-function edHitLeg(x, y) { let best = null, bd = 5 * 5;
-  ED.legs.forEach((g, i) => { const pts = g || [ED.wp[i], ED.wp[i + 1]]; for (let k = 1; k < pts.length; k++) { const [x1, y1] = edScr(pts[k - 1].lat, pts[k - 1].lon), [x2, y2] = edScr(pts[k].lat, pts[k].lon), dx = x2 - x1, dy = y2 - y1, L2 = dx * dx + dy * dy, u = L2 ? Math.max(0, Math.min(1, ((x - x1) * dx + (y - y1) * dy) / L2)) : 0, d = (x1 + u * dx - x) ** 2 + (y1 + u * dy - y) ** 2; if (d < bd) { bd = d; best = i; } } });
-  return best; }
-function edPickIdx(x, y, lo = 0, hi = Infinity, R = 16) { const r = ED.r; let best = null, bd = R * R; for (let i = Math.max(0, lo); i < Math.min(r.N, hi + 1); i++) { if (r.trimmed && r.trimmed[i]) continue; const p = r.R[i]; if (p.lat == null || r.badReason[i]) continue; const q = edScr(p.lat, p.lon), d = (q[0] - x) ** 2 + (q[1] - y) ** 2; if (d < bd) { bd = d; best = i; } } return best; }
-{
-  // gpx.studio-style: a click ALWAYS adds a point at the end of the line (however close to others);
-  // dragging a point moves it, dragging the line inserts a point, dragging empty map pans, right-click deletes.
-  let drag = null; const rel = e => { const b = edCv.getBoundingClientRect(); return [e.clientX - b.left, e.clientY - b.top]; };
-  edCv.addEventListener('contextmenu', e => e.preventDefault());
-  edCv.addEventListener('pointerdown', e => { const [x, y] = rel(e); edCv.setPointerCapture(e.pointerId);
-    if (e.button === 2) { if (ED.pick) return; const w = edHitWp(x, y, 9); if (w != null) { edSnap(); const nx = ED.wp[w + 1]; ED.wp.splice(w, 1); if (nx && nx.mode == null) nx.mode = ED.mode; edRoute(); return; }
-      const l = edHitLeg(x, y); if (l != null) { edSnap(); const b = ED.wp[l + 1]; b.mode = b.mode === 'line' ? (ED.mode === 'line' ? 'free' : ED.mode) : 'line'; edRoute(); } return; }
-    if (e.button !== 0) return;
-    let anchor = null;
-    if (!ED.pick) { const near = p => { if (!p) return false; const q = edScr(p.lat, p.lon); return (q[0] - x) ** 2 + (q[1] - y) ** 2 <= 11 * 11; };
-      if (ED.wp[0] && ED.wp[0].fixed && near(ED.wp[0])) anchor = 'A'; else if (near(ED.Bpt)) anchor = 'B'; }
-    const w = ED.pick || anchor ? null : edHitWp(x, y), l = ED.pick || anchor || w != null ? null : edHitLeg(x, y);
-    drag = { x, y, cx: ED.cx, cy: ED.cy, moved: false, wp: w, leg: l, anchor }; });
-  edCv.addEventListener('pointermove', e => { const [x, y] = rel(e); ED.mouse = [x, y];
-    if (drag) { if (!drag.moved && Math.abs(x - drag.x) + Math.abs(y - drag.y) > 5) { drag.moved = true; ED.dragging = true;
-        if (drag.wp != null || drag.anchor) edSnap();
-        else if (drag.leg != null) { edSnap(); const b = ED.wp[drag.leg + 1]; ED.wp.splice(drag.leg + 1, 0, { ...edLL(x, y), fixed: false, mode: b.mode }); drag.wp = drag.leg + 1; } }
-      if (drag.moved && drag.anchor) { // slide A / B along the recorded track
-        const r = ED.r, i = drag.anchor === 'A' ? edPickIdx(x, y, 0, ED.B - 3, 10) : edPickIdx(x, y, ED.A + 3, Infinity, 10);
-        const p = i != null ? { lat: r.R[i].lat, lon: r.R[i].lon } : edLL(x, y);   // snaps to the track only when right on it
-        if (drag.anchor === 'A') { Object.assign(ED.wp[0], p); if (i != null) ED.A = i; if (ED.legs.length) { ED.legs[0] = null; ED.legKey[0] = null; } } else { ED.Bpt = p; if (i != null) ED.B = i; }
-        edDraw(); return; }
-      if (drag.moved) { if (drag.wp != null) { Object.assign(ED.wp[drag.wp], edLL(x, y)); for (const i of [drag.wp - 1, drag.wp]) if (i >= 0 && i < ED.legs.length) { ED.legs[i] = null; ED.legKey[i] = null; } edDraw(); }
-        else { ED.cx = drag.cx - (x - drag.x); ED.cy = drag.cy - (y - drag.y); edDraw(); } } return; }
-    if (ED.pick) { ED.pickHover = edPickIdx(x, y, 0, Infinity, 80); edDraw(); return; }
-    const h = edHitWp(x, y), l = h == null ? edHitLeg(x, y) : null; ED.hot = h;
-    const nearAB = [ED.wp[0] && ED.wp[0].fixed ? ED.wp[0] : null, ED.Bpt].some(p => { if (!p) return false; const q = edScr(p.lat, p.lon); return (q[0] - x) ** 2 + (q[1] - y) ** 2 <= 121; });
-    edCv.style.cursor = h != null || nearAB ? 'grab' : l != null ? 'pointer' : 'crosshair'; edDraw(); });
-  edCv.addEventListener('pointerleave', () => { ED.mouse = null; edDraw(); });
-  edCv.addEventListener('pointerup', e => { const [x, y] = rel(e); const d = drag; drag = null; ED.dragging = false; if (!d) return;
-    if (d.moved) { if (d.anchor) { const r = ED.r; ED.target = r.hasDist && r.sensor ? r.finalDist[ED.B] - r.finalDist[ED.A] : null; edRoute(); return; } if (d.wp != null) edRoute(); return; }
-    if (ED.pick) { // 1 click picks the start: on the track → there, elsewhere → from the beginning of the recording at that spot
-      const last = ED.r.kb ?? ED.r.N - 1, i = edPickIdx(x, y, 0, last - 3, 25);
-      ED.join = true; edStart(i ?? (ED.r.ka ?? 0), last, null, i == null ? edLL(x, y) : null); return; }
-    if (ED.join && ED.wp.length) { // drawing back onto the track ends the section there
-      const j = edPickIdx(x, y, ED.A + 3, Infinity, 12);
-      if (j != null) { const r = ED.r; ED.B = j; ED.Bpt = { lat: r.R[j].lat, lon: r.R[j].lon }; ED.join = false; ED.target = r.hasDist && r.sensor ? r.finalDist[ED.B] - r.finalDist[ED.A] : null;
-        toast('Линия соединена с треком — нажмите «Готово»'); edInfo(); edDraw(); return; } }
-    const mg = magnet(x, y) || [x, y];
-    edSnap(); const np = { ...edLL(mg[0], mg[1]), fixed: false, mode: ED.wp.length ? ED.mode : undefined };
-    const at = ED.gapB != null ? ED.wp.findIndex(w => w.idx != null && w.idx >= ED.gapB) : -1;   // inside the gap, before the recorded part after it
-    if (at > 0) ED.wp.splice(at, 0, np); else ED.wp.push(np); edRoute(); });
-  let acc = 0; edCv.addEventListener('wheel', e => { e.preventDefault(); acc += e.deltaY; if (Math.abs(acc) >= 60) { const [x, y] = rel(e); edZoom(acc < 0 ? 1 : -1, x, y); acc = 0; } }, { passive: false });
-  addEventListener('keydown', e => { if (!$('ed').classList.contains('open')) return; if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); $('edUndo').onclick(); } if (e.key === 'Escape') { e.stopPropagation(); $('edCancel').onclick(); } }, true);
-  new ResizeObserver(() => { if ($('ed').classList.contains('open')) edResize(); }).observe(edCv);
-}
-const editsKey = f => 'edits:' + f.name + ':' + f.bytes.length;
-// part of the gap: drawn line covers A → the record whose sensor distance matches the drawn length; the rest stays a gap
-$('edPart').onclick = () => { pushHist();
-  const f = ED.f, r = ED.r, L = edLen(), A = ED.A, B = ED.B; let M = A + 1;
-  if (r.hasDist && r.sensor) { while (M < B - 2 && r.finalDist[M] - r.finalDist[A] < L) M++; }
-  else { const T = r.R[A].t + (r.R[B].t - r.R[A].t) * Math.min(0.95, L / Math.max(1, VF.hav(r.R[A].lat ?? 0, r.R[A].lon ?? 0, ED.Bpt.lat, ED.Bpt.lon) || 1)); while (M < B - 2 && r.R[M].t < T) M++; }
-  if (M >= B - 2) { toast('Нарисовано почти до B — нажмите «Готово»'); return; }
-  const pts = []; for (const g of ED.legs) for (const p of g || []) { const q = pts[pts.length - 1]; if (!q || q.lat !== p.lat || q.lon !== p.lon) pts.push({ lat: p.lat, lon: p.lon }); }
-  if (pts.length < 2) return;
-  const t0 = r.R[A].t, t1 = r.R[M].t;
-  f.edits = (f.edits || []).filter(e => !(e.type === 'route' && e.t0 < t1 && e.t1 > t0));
-  f.edits.push({ type: 'route', t0, t1, pts, src: 'нарисовано вручную', wp: ED.wp.map(w => ({ lat: w.lat, lon: w.lon, fixed: !!w.fixed, mode: w.mode })) });
-  f.res = null; edClose(); showCurrent();
-  const left = r.hasDist ? r.finalDist[B] - r.finalDist[M] : null;
-  toast(VF_I18N.lang === 'en' ? 'Part saved. The rest of the gap stays in the list — continue any time.' : `Часть сохранена. Остаток пропуска${left != null ? ' (' + fmt(left / 1000, 1) + ' км)' : ''} — в списке «Участки без GPS», продолжите когда удобно.`, 7000);
-};
-$('edDone').onclick = async () => { pushHist();
-  const f = ED.f, r = ED.r;
-  { const last = ED.wp[ED.wp.length - 1], rest = last && ED.Bpt ? VF.hav(last.lat, last.lon, ED.Bpt.lat, ED.Bpt.lon) : 0, L = edLen() + rest;
-    if (ED.target && ED.target > 300 && Math.abs(L / ED.target - 1) > 0.3) {
-      const msg = VF_I18N.lang === 'en' ? `Drawn ${fmt(L / 1000, 1)} km, but the speed sensor says ${fmt(ED.target / 1000, 1)} km. Save anyway?` : `Нарисовано ${fmt(L / 1000, 1)} км, а по датчику скорости — ${fmt(ED.target / 1000, 1)} км. Похоже, линия не совпадает с тем, где вы ехали. Всё равно сохранить?`;
-      if (!confirm(msg)) return; } }
-  // connect the last point to B (by roads, in the current mode)
-  const last = ED.wp[ED.wp.length - 1];
-  if (ED.Bpt && last && VF.hav(last.lat, last.lon, ED.Bpt.lat, ED.Bpt.lon) > 3) { $('edDone').disabled = true; ED.wp.push({ ...ED.Bpt, fixed: true, mode: 'line' }); await edRoute(); }
-  const pts = [];
-  for (const g of ED.legs) for (const p of g || []) { const q = pts[pts.length - 1]; if (!q || q.lat !== p.lat || q.lon !== p.lon) pts.push({ lat: p.lat, lon: p.lon }); }
-  if (pts.length < 2) { toast('Поставьте хотя бы одну точку'); return; }
-  const t0 = r.R[ED.A].t, t1 = r.R[ED.B].t;
-  f.edits = (f.edits || []).filter(e => !(e.type === 'route' && e.t0 < t1 && e.t1 > t0));
-  f.edits.push({ type: 'route', t0, t1, pts, src: 'нарисовано вручную', wp: ED.wp.map(w => ({ lat: w.lat, lon: w.lon, fixed: !!w.fixed, mode: w.mode })) });
-  f.res = null; edClose(); showCurrent();
-  const nx = gapItems(f.res).find(g => g.status !== 'drawn' && g.status !== 'gpx' && g.t0 > t1);
-  if (nx) askNext(f, nx); else toast('Участок нарисован и встроен в трек');
-};
-// ================= snap to roads (OSRM map matching) =================
-// GPS in dense city blocks drifts 20–60 m into the buildings; map matching moves it back onto the road actually ridden.
-function askNext(f, nx) {
-  const r = f.res, L = t => new Date((t + VF.FIT_EPOCH + r.tzOff) * 1000).toISOString().slice(11, 16), en = VF_I18N.lang === 'en';
-  const t = $('toast'); clearTimeout(toast.t); t.style.display = 'block';
-  t.innerHTML = `${en ? 'Section added. Next gap' : 'Участок встроен. Дальше пропуск'} <b>${L(nx.t0)}</b>${nx.len != null ? ', ' + fmt(nx.len / 1000, 1) + (en ? ' km' : ' км') : ''} — <button class="btn sm" id="nxYes">${en ? 'Draw' : 'Дорисовать'}</button> <button class="btn sm" id="nxNo">${en ? 'Later' : 'Потом'}</button>`;
-  $('nxYes').onclick = () => { t.style.display = 'none'; openEditor(f, nx.A, nx.B, nx.edit, true); };
-  $('nxNo').onclick = () => { t.style.display = 'none'; };
-  toast.t = setTimeout(() => t.style.display = 'none', 15000);
-}
 function gapItems(r) {
   if (!r) return []; const f = cur(), out = [], ka = r.ka ?? 0, kb = r.kb ?? r.N - 1;
   const edit = (A, B) => (f.edits || []).find(e => e.type === 'route' && e.t0 === r.R[A].t && e.t1 === r.R[B].t);
@@ -1646,24 +1445,28 @@ function renderGapList(r) {
   $('drawFree').onclick = () => teStart();
   if ($('resetEdits')) $('resetEdits').onclick = () => { pushHist(); const f = cur(); f.edits = []; f.res = null; showCurrent(); toast('Правки сброшены'); };
 
-  $('gaps').querySelectorAll('[data-gap]').forEach(b => b.onclick = () => { const g = items[+b.dataset.gap]; openEditor(cur(), g.A, g.B, g.edit, true); });
+  $('gaps').querySelectorAll('[data-gap]').forEach(b => b.onclick = () => { const g = items[+b.dataset.gap];
+    if (g.status !== 'drawn') return teDrawStart(g.A, g.B);
+    // already drawn: select it in the editor — drag its points or «Перерисовать»
+    teStart(); TE.tool = 'select'; TE.sel = [g.A, g.B]; M.fitRange(g.A, g.B); teUi(); M.draw();
+    toast(VF_I18N.tr('Нарисованный участок выделен — тяните его точки («Тянуть») или нажмите «Перерисовать»'), 7000); });
 }
 
-// ================= track editor («✎ Править трек», beta) =================
+// ================= track editor («✎ Править трек») =================
 // Works right on the main map. Every record keeps its time; only its position changes. On «Готово» the changed
 // stretches become route edits, and the core re-spreads the records along the new shape by the speed sensor.
 const TE = { on: false, tool: 'drag', R: 100, ER: 18, pos: null, orig: null, undo: [], redo: [], sel: null, selA: null, selDrag: null, drag: null, erasing: false,
   verts: [], pins: new Set(), hover: null, peek: false, issues: [], issK: 0, busy: false };
 function teStart() {
   const f = cur(), r = f && f.res; if (!r) return;
-  Object.assign(TE, { on: true, f, r, undo: [], redo: [], sel: null, selA: null, selDrag: null, drag: null, erasing: false, pins: new Set(), hover: null, peek: false, issues: [], issK: 0 });
+  Object.assign(TE, { on: true, f, r, dw: null, tool: 'drag', undo: [], redo: [], sel: null, selA: null, selDrag: null, drag: null, erasing: false, pins: new Set(), hover: null, peek: false, issues: [], issK: 0 });
   TE.pos = r.newLL.map((p, i) => (r.trimmed && r.trimmed[i]) || !p || p.lat == null ? null : { lat: p.lat, lon: p.lon });
   TE.orig = TE.pos.map(p => p && { ...p });
   document.querySelectorAll('#colorSeg,#tileSeg').forEach(e => e.parentElement.style.visibility = 'hidden');
   teVerts(); M.view = 'edit'; $('teBar').style.display = 'flex'; $('teHintBox').style.display = 'block'; $('viewSeg').style.visibility = 'hidden'; teUi(); M.draw();
-  teFindIssues();
+  teFindIssues(); teDraftOffer();
 }
-function teStop() { document.querySelectorAll('#colorSeg,#tileSeg').forEach(e => e.parentElement.style.visibility = ''); TE.on = false; TE.peek = false; $('teBar').style.display = 'none'; $('teHintBox').style.display = 'none'; $('teIssues').style.display = 'none'; $('viewSeg').style.visibility = ''; M.view = S.view; M.draw(); }
+function teStop() { document.querySelectorAll('#colorSeg,#tileSeg').forEach(e => e.parentElement.style.visibility = ''); TE.on = false; TE.peek = false; TE.dw = null; $('teBar').style.display = 'none'; $('teDraw').style.display = 'none'; $('teHintBox').style.display = 'none'; $('teIssues').style.display = 'none'; $('viewSeg').style.visibility = ''; M.view = S.view; M.draw(); }
 function teVerts() { // turning points of the current shape (Douglas–Peucker) + user pins, the drag handles
   const pts = []; TE.pos.forEach((p, i) => { if (p) pts.push({ lat: p.lat, lon: p.lon, idx: i }); });
   const out = []; let run = [];
@@ -1750,7 +1553,7 @@ async function teApply(kind) {
   if (!TE.sel) return; let [a, b] = TE.sel;
   while (a < b && !TE.pos[a]) a++; while (b > a && !TE.pos[b]) b--;
   if (!TE.pos[a] || !TE.pos[b] || b - a < 1) { toast('Начало и конец выделения должны быть на треке'); return; }
-  if (kind === 'redraw') { TE.sel = null; await teSave(false); const f = cur(); openEditor(f, a, b, null); return; }
+  if (kind === 'redraw') { teDrawStart(a, b); return; }
   teSnap();
   if (kind === 'line') tePlace(a, b, [TE.pos[a], TE.pos[b]]);
   else if (kind === 'road') await teBusy('прокладываю…', async () => { const g = await routeLeg(TE.pos[a], TE.pos[b], store.get('edMode', 'free') === 'line' ? 'free' : store.get('edMode', 'free')); tePlace(a, b, g && g.length > 2 ? g : [TE.pos[a], TE.pos[b]]); });
@@ -1772,6 +1575,7 @@ function teEraseAt(x, y) { let n = 0; for (let i = 0; i < TE.pos.length; i++) { 
 function teChanged() { const ch = []; for (let i = 0; i < TE.pos.length; i++) { const p = TE.pos[i], o = TE.orig[i]; if ((!p) !== (!o) || (p && (Math.abs(p.lat - o.lat) > 1e-7 || Math.abs(p.lon - o.lon) > 1e-7))) ch.push(i); } return ch; }
 async function teSave(stay) {
   const f = TE.f, r = TE.r, ch = teChanged(), N = r.N; if (ch.length) pushHist();
+  teDraftClear(f);
   if (!ch.length) { if (!stay) teStop(); return; }
   // contiguous changed stretches (+1 record of anchor on each side)
   let rng = []; for (const i of ch) { const g = rng[rng.length - 1]; if (g && i - g[1] <= 3) g[1] = i; else rng.push([i, i]); }
@@ -1805,6 +1609,18 @@ function teStat() {
     (sens ? ` · датчик ${fmt(sens / 1000, 2)} км · <b style="color:var(${Math.abs(L / sens - 1) <= 0.02 ? '--ok' : '--warn'})">${fmt(L / sens * 100, 1)}%</b>` : '');
 }
 function teUi() {
+  const D = TE.dw; $('teDraw').style.display = TE.on && D ? 'flex' : 'none'; $('teBar').style.display = TE.on && !D ? 'flex' : 'none';
+  if (D) { const en = VF_I18N.lang === 'en';
+    document.querySelectorAll('#teDMode button').forEach(b => b.classList.toggle('on', b.dataset.m === D.mode));
+    $('teDBusy').style.display = D.routing ? 'inline' : 'none'; $('teDUndo').disabled = !D.undo.length;
+    $('teHint').textContent = TE.peek ? VF_I18N.tr('Показан исходный трек — отпустите пробел')
+      : !D.wp.length ? VF_I18N.tr(D.Bpt ? 'Щёлкните, где начали поездку — это старт A, дальше ставьте точки до B' : 'Щёлкните, откуда рисовать')
+      : VF_I18N.tr(D.Bpt ? 'Ставьте точки по пути · щелчок по B или Enter — готово · правый клик по точке — убрать · карту можно двигать' : 'Ставьте точки до финиша · Enter — готово · правый клик по точке — убрать');
+    const L = teDwLen(), lw = D.wp[D.wp.length - 1], rest = lw && D.Bpt ? VF.hav(lw.lat, lw.lon, D.Bpt.lat, D.Bpt.lon) : 0, T = D.target, tot = L + rest;
+    const okc = T && D.wp.length > 1 ? (Math.abs(tot / T - 1) <= 0.08 ? '--ok' : Math.abs(tot / T - 1) <= 0.3 ? '--warn' : '--bad') : null;
+    $('teStat').innerHTML = (en ? 'Drawn ' : 'Нарисовано ') + `<b>${fmt(L / 1000, 2)} ${en ? 'km' : 'км'}</b>` + (T ? (en ? ' of ' : ' из ') + `<b style="${okc ? 'color:var(' + okc + ')' : ''}">${fmt(T / 1000, 2)} ${en ? 'km' : 'км'}</b> ${en ? 'by the wheel' : 'по датчику'}` : '')
+      + (D.Bpt && rest > 30 ? ` · ${en ? 'to B' : 'до B'} ${rest >= 1000 ? fmt(rest / 1000, 1) + (en ? ' km' : ' км') : Math.round(rest) + (en ? ' m' : ' м')}` : '');
+    return; }
   document.querySelectorAll('#teTool button').forEach(b => b.classList.toggle('on', b.dataset.t === TE.tool));
   $('teR').textContent = TE.tool === 'erase' ? TE.ER * 2 + ' px' : TE.R >= 1000 ? fmt(TE.R / 1000, 1) + ' км' : TE.R + ' м';
   $('teRadius').style.display = TE.tool === 'select' ? 'none' : '';
@@ -1818,9 +1634,16 @@ function teUi() {
   teStat();
 }
 document.querySelectorAll('#teTool button').forEach(b => b.onclick = () => teTool(b.dataset.t));
-function teTool(t) { TE.tool = t; TE.sel = null; TE.selA = null; TE.hover = null; teUi(); M.draw(); }
+function teTool(t) {
+  if (t === 'draw') { // with a selection — redraw it; otherwise the nearest GPS gap to the middle of the screen
+    if (TE.sel) { const [a, b] = TE.sel; return teDrawStart(a, b); }
+    const c = llOf(M.w / 2, M.h / 2); let best = null, bd = Infinity, from = -1;
+    for (let g = teNextGap(from); g; g = teNextGap(g[1])) { const p = TE.pos[g[0]] || TE.pos[g[1]]; const d = p ? VF.hav(c.lat, c.lon, p.lat, p.lon) : 1e9; if (d < bd) { bd = d; best = g; } }
+    if (best) return teDrawStart(best[0], best[1]);
+    toast(VF_I18N.tr('Пропусков GPS нет. Чтобы перерисовать кусок трека, сначала выделите его («Выделить»)'), 6000); return; }
+  TE.tool = t; TE.sel = null; TE.selA = null; TE.hover = null; teUi(); M.draw(); }
 $('editBtn').onclick = () => teStart();
-$('teCancel').onclick = () => { if (teChanged().length && !confirm(VF_I18N.tr('Выйти без сохранения правок?'))) return; teStop(); };
+$('teCancel').onclick = () => { if (teChanged().length && !confirm(VF_I18N.tr('Выйти без сохранения правок?'))) return; teDraftClear(TE.f); teStop(); };
 $('teDone').onclick = () => teSave(false);
 $('teUndo').onclick = teUndo; $('teRedo').onclick = teRedo; $('teSnapAll').onclick = teSnapAll;
 $('teSelOps').querySelectorAll('[data-op]').forEach(b => b.onclick = () => teApply(b.dataset.op));
@@ -1830,15 +1653,21 @@ function teRadius(up) {
   teUi(); M.draw();
 }
 addEventListener('keydown', e => {
-  if (!TE.on || $('ed').classList.contains('open') || /^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || '')) return;
+  if (!TE.on || /^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || '')) return;
   const k = e.key.toLowerCase(), ctrl = e.ctrlKey || e.metaKey;
+  if (TE.dw) { // drawing: Enter — done, Esc — cancel, Backspace / Ctrl+Z — remove the last point
+    if (e.key === 'Enter') { e.preventDefault(); teDrawDone(); }
+    else if (e.key === 'Escape') { e.preventDefault(); teDrawCancel(); }
+    else if (e.key === 'Backspace' || (ctrl && (k === 'z' || k === 'я'))) { e.preventDefault(); teDwUndo(); }
+    else if (e.key === ' ') { e.preventDefault(); if (!TE.peek) { TE.peek = true; teUi(); M.draw(); } }
+    return; }
   if (ctrl && (k === 'y' || (k === 'z' && e.shiftKey) || k === 'н')) { e.preventDefault(); teRedo(); return; }
   if (ctrl && (k === 'z' || k === 'я')) { e.preventDefault(); teUndo(); return; }
   if (ctrl || e.altKey) return;
   if (e.key === ' ') { e.preventDefault(); if (!TE.peek) { TE.peek = true; teUi(); M.draw(); } return; }
   if (e.key === 'Escape') { TE.sel = null; TE.selA = null; teUi(); M.draw(); return; }
   if (e.key === '[' || e.key === ']' || k === 'х' || k === 'ъ') { teRadius(e.key === ']' || k === 'ъ'); return; }
-  const tools = { d: 'drag', 'в': 'drag', s: 'select', 'ы': 'select', e: 'erase', 'у': 'erase' };
+  const tools = { d: 'drag', 'в': 'drag', s: 'select', 'ы': 'select', e: 'erase', 'у': 'erase', n: 'draw', 'т': 'draw' };
   if (tools[k]) { teTool(tools[k]); return; }
   if (TE.sel) { const ops = { g: 'snap', 'п': 'snap', r: 'road', 'к': 'road', l: 'line', 'д': 'line' };
     if (ops[k]) { teApply(ops[k]); return; } if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); teApply('erase'); } }
@@ -1851,7 +1680,7 @@ PF.cv.addEventListener('pointerup', () => { if (!TE.on || !S.sel) return; TE.too
 {
   const cv = M.cv, rel = e => { const b = cv.getBoundingClientRect(); return [e.clientX - b.left, e.clientY - b.top]; };
   cv.addEventListener('pointerdown', e => {
-    if (!TE.on || TE.peek || TE.busy) return; const [x, y] = rel(e);
+    if (!TE.on || TE.peek || TE.busy || TE.dw) return; const [x, y] = rel(e);
     if (e.button === 2) { const v = teHitVert(x, y); if (v != null) { e.stopImmediatePropagation(); teSnap();
         if (TE.pins.has(v)) TE.pins.delete(v); else { const k = TE.verts.indexOf(v), a = TE.verts[k - 1], b = TE.verts[k + 1]; if (a != null && b != null) tePlace(a, b, [TE.pos[a], TE.pos[b]]); }
         teVerts(); teUi(); M.draw(); } return; }
@@ -1866,7 +1695,7 @@ PF.cv.addEventListener('pointerup', () => { if (!TE.on || !S.sel) return; TE.too
     TE.drag = { i, vert: v != null, lo, hi, base: TE.pos.map(p => p && { ...p }), start: llOf(x, y), x0: x, y0: y, moved: false };
   }, true);
   cv.addEventListener('pointermove', e => {
-    if (!TE.on) return; const [x, y] = rel(e);
+    if (!TE.on || TE.dw) return; const [x, y] = rel(e);
     if (TE.erasing) { e.stopImmediatePropagation(); TE.hover = { x, y }; teEraseAt(x, y); M.draw(); return; }
     if (TE.selDrag) { e.stopImmediatePropagation(); const i = teHit(x, y, 24); if (i != null && i !== TE.selDrag.i0) { TE.selDrag.moved = true; TE.sel = [Math.min(TE.selDrag.i0, i), Math.max(TE.selDrag.i0, i)]; M.draw(); } return; }
     if (!TE.drag) {
@@ -1887,7 +1716,7 @@ PF.cv.addEventListener('pointerup', () => { if (!TE.on || !S.sel) return; TE.too
     M.draw();
   }, true);
   const up = e => {
-    if (!TE.on) return;
+    if (!TE.on || TE.dw) return;
     if (TE.erasing) { e.stopImmediatePropagation(); TE.erasing = false; teVerts(); teUi(); M.draw(); teIssuesStale(); return; }
     if (TE.selDrag) { e.stopImmediatePropagation(); const sd = TE.selDrag; TE.selDrag = null;
       if (sd.moved) { TE.selA = null; if (TE.sel && TE.sel[1] - TE.sel[0] < 2) TE.sel = null; } teUi(); M.draw(); return; }
@@ -1900,6 +1729,118 @@ PF.cv.addEventListener('pointerup', () => { if (!TE.on || !S.sel) return; TE.too
   cv.addEventListener('dblclick', e => { if (!TE.on || TE.tool !== 'drag') return; const [x, y] = rel(e), i = teHit(x, y, 12); if (i == null) return;
     e.preventDefault(); e.stopImmediatePropagation(); teSnap(); TE.pins.add(i); teVerts(); teUi(); M.draw(); }, true);
   cv.addEventListener('contextmenu', e => { if (TE.on) e.preventDefault(); });
+}
+function simplifyPts(pts, tol) { // Douglas–Peucker in metres
+  if (pts.length < 3) return pts.slice(); const k = Math.cos(pts[0].lat * Math.PI / 180), X = p => [p.lon * 111320 * k, p.lat * 110540];
+  const P = pts.map(X), keep = new Array(pts.length).fill(false); keep[0] = keep[pts.length - 1] = true; const st = [[0, pts.length - 1]];
+  while (st.length) { const [a, b] = st.pop(); let md = 0, mi = -1; const [ax, ay] = P[a], [bx, by] = P[b], dx = bx - ax, dy = by - ay, L = Math.hypot(dx, dy) || 1;
+    for (let i = a + 1; i < b; i++) { const d = Math.abs((P[i][0] - ax) * dy - (P[i][1] - ay) * dx) / L; if (d > md) { md = d; mi = i; } }
+    if (md > tol) { keep[mi] = true; st.push([a, mi], [mi, b]); } }
+  return pts.filter((p, i) => keep[i]);
+}
+// ---- «Дорисовать»: draw a GPS gap (or redraw a stretch) point by point, right on the main map.
+// The drawn line always covers the whole stretch a..b: records are spread along it by the wheel sensor (tePlace),
+// so there is no way to squeeze a long line into a short part (that broke a ride in 2.9 — «Сохранить часть»).
+function teDrawStart(a, b) {
+  if (!TE.on) teStart(); if (!TE.on) return;
+  const N = TE.pos.length; a = Math.max(0, a); b = Math.min(N - 1, b);
+  const noA = !TE.pos[a], noB = !TE.pos[b];
+  const D = TE.dw = { a, b, noA, noB, mode: store.get('edMode', 'free'), legs: [], keys: [], undo: [], mouse: null,
+    wp: noA ? [] : [{ lat: TE.pos[a].lat, lon: TE.pos[a].lon, fixed: true }], Bpt: noB ? null : { lat: TE.pos[b].lat, lon: TE.pos[b].lon },
+    target: TE.r.hasDist ? teDist(b) - teDist(a) : null };
+  TE.sel = null; TE.selA = null; TE.hover = null; TE.tool = 'draw';
+  // view: both ends of the stretch; with one end unknown — the area within reach of the known one
+  const ends = [D.wp[0], D.Bpt].filter(Boolean);
+  if (ends.length) { let s = 90, n = -90, w = 180, e = -180; for (const p of ends) { s = Math.min(s, p.lat); n = Math.max(n, p.lat); w = Math.min(w, p.lon); e = Math.max(e, p.lon); }
+    if (ends.length < 2) { const R = Math.min(8000, Math.max(800, (D.target || 3000) * 0.5)), dl = R / 110540, dw = R / (111320 * Math.cos(ends[0].lat * Math.PI / 180)); s -= dl; n += dl; w -= dw; e += dw; }
+    if (n - s < 0.004) { s -= 0.002; n += 0.002; } if (e - w < 0.006) { w -= 0.003; e += 0.003; }
+    Object.assign(M, M.fitBox({ s, n, w, e }, M.w, M.h, 110, 17)); }
+  for (const p of ends) ensureCells(p.lat - 0.003, p.lon - 0.005, p.lat + 0.003, p.lon + 0.005, roadsProgress).catch(() => {});
+  teUi(); M.draw();
+}
+function teDrawCancel() { TE.dw = null; TE.tool = 'drag'; teUi(); M.draw(); }
+const teDwSnap = () => { const D = TE.dw; D.undo.push(JSON.stringify(D.wp)); if (D.undo.length > 300) D.undo.shift(); };
+function teDwUndo() { const D = TE.dw; if (!D || !D.undo.length) return; D.wp = JSON.parse(D.undo.pop()); teDwRoute(); }
+function teDwHit(x, y, R = 8) { let best = null, bd = R * R; (TE.dw ? TE.dw.wp : []).forEach((w, i) => { if (w.fixed) return; const q = M.scr(w.lat, w.lon), d = (q[0] - x) ** 2 + (q[1] - y) ** 2; if (d <= bd) { bd = d; best = i; } }); return best; }
+function teDwLen() { let L = 0; for (const g of TE.dw.legs) if (g) for (let k = 1; k < g.length; k++) L += VF.hav(g[k - 1].lat, g[k - 1].lon, g[k].lat, g[k].lon); return L; }
+async function teDwRoute() {
+  const D = TE.dw; if (!D) return; const need = [];
+  D.legs.length = Math.max(0, D.wp.length - 1);
+  for (let i = 0; i < D.wp.length - 1; i++) { const a = D.wp[i], b = D.wp[i + 1], k = `${b.mode}|${a.lat},${a.lon}|${b.lat},${b.lon}`; if (D.keys[i] !== k) { D.legs[i] = null; D.keys[i] = k; need.push(i); } }
+  D.keys.length = D.legs.length; teUi(); M.draw();
+  if (!need.length) return;
+  D.routing = (D.routing || 0) + 1; teUi();
+  await Promise.all(need.map(async i => { const a = D.wp[i], b = D.wp[i + 1], k = D.keys[i]; let g = null; try { g = await routeLeg(a, b, b.mode); } catch (e) {} if (D.keys[i] === k) D.legs[i] = g || [a, b]; }));
+  D.routing--; if (TE.dw === D) { teUi(); M.draw(); }
+}
+function teNextGap(from) { // next stretch without coordinates after `from` → [last point before, first point after]
+  const P = TE.pos, N = P.length, tr = TE.r.trimmed;
+  for (let i = from + 1; i < N; i++) { if (P[i] || (tr && tr[i]) || !P[i - 1]) continue;
+    let j = i; while (j + 1 < N && !P[j + 1] && !(tr && tr[j + 1])) j++;
+    if (j - i + 1 > 15) return [i - 1, Math.min(N - 1, j + 1)]; i = j; }
+  return null;
+}
+async function teDrawDone() {
+  const D = TE.dw; if (!D) return; const en = VF_I18N.lang === 'en';
+  const last = D.wp[D.wp.length - 1]; let addedB = false;
+  if (D.Bpt && last && VF.hav(last.lat, last.lon, D.Bpt.lat, D.Bpt.lon) > 3) { D.wp.push({ ...D.Bpt, fixed: true, mode: D.mode }); addedB = true; teDwRoute(); }
+  if (D.wp.length < 2) { toast(en ? 'Place at least one point' : 'Поставьте хотя бы одну точку'); return; }
+  for (let k = 0; k < 800 && D.legs.some(g => !g); k++) await new Promise(r => setTimeout(r, 150));   // routing of the last legs
+  if (TE.dw !== D) return;
+  const line = []; for (const g of D.legs) for (const p of g || []) { const q = line[line.length - 1]; if (!q || q.lat !== p.lat || q.lon !== p.lon) line.push({ lat: p.lat, lon: p.lon }); }
+  let L = 0; for (let k = 1; k < line.length; k++) L += VF.hav(line[k - 1].lat, line[k - 1].lon, line[k].lat, line[k].lon);
+  if (line.length < 2) { toast(en ? 'Place at least one point' : 'Поставьте хотя бы одну точку'); return; }
+  if (D.target && D.target > 300 && Math.abs(L / D.target - 1) > 0.3 &&
+      !confirm(en ? `Drawn ${fmt(L / 1000, 1)} km, but the wheel sensor says ${fmt(D.target / 1000, 1)} km here. Probably the line does not follow where you rode. Use it anyway?`
+        : `Нарисовано ${fmt(L / 1000, 1)} км, а по датчику колеса на этом участке — ${fmt(D.target / 1000, 1)} км. Похоже, линия не там, где вы ехали. Всё равно использовать?`)) {
+    if (addedB) { D.wp.pop(); teDwRoute(); } return; }
+  teSnap(); tePlace(D.a, D.b, line);
+  TE.dw = null; TE.tool = 'drag'; teVerts(); teUi(); M.draw(); teIssuesStale();
+  const nx = teNextGap(D.b);
+  if (nx) { const km = TE.r.hasDist ? fmt((teDist(nx[1]) - teDist(nx[0])) / 1000, 1) + (en ? ' km' : ' км') : '';
+    toastAct(en ? `Gap drawn. Next gap${km ? ': ' + km : ''}.` : `Пропуск дорисован. Дальше ещё пропуск${km ? ' — ' + km : ''}.`, [[en ? 'Draw it' : 'Дорисовать', () => teDrawStart(nx[0], nx[1])], [en ? 'Later' : 'Потом', () => {}]]); }
+  else toast(en ? 'Gap drawn — press «Done» to build it into the track' : 'Пропуск дорисован — нажмите «Готово», чтобы встроить его в трек', 6000);
+}
+document.querySelectorAll('#teDMode button').forEach(b => b.onclick = () => { if (!TE.dw) return; TE.dw.mode = b.dataset.m; store.set('edMode', b.dataset.m); teUi(); });
+$('teDUndo').onclick = teDwUndo; $('teDCancel').onclick = teDrawCancel; $('teDDone').onclick = teDrawDone;
+{ // pointer handling while drawing: click — a point (empty map can still be dragged to pan), drag a point — move it, right click — delete
+  const cv = M.cv, rel = e => { const b = cv.getBoundingClientRect(); return [e.clientX - b.left, e.clientY - b.top]; };
+  let down = null;
+  cv.addEventListener('pointerdown', e => { const D = TE.dw; if (!TE.on || !D || TE.busy || TE.peek) return; const [x, y] = rel(e);
+    if (e.button === 2) { const w = teDwHit(x, y, 9); if (w != null) { e.stopImmediatePropagation(); teDwSnap(); D.wp.splice(w, 1); if (D.wp[w] && D.wp[w].mode == null && w) D.wp[w].mode = D.mode; teDwRoute(); } return; }
+    if (e.button !== 0) return;
+    const w = teDwHit(x, y); down = { x, y, w, moved: false };
+    if (w != null) { e.stopImmediatePropagation(); cv.setPointerCapture(e.pointerId); } }, true);
+  cv.addEventListener('pointermove', e => { const D = TE.dw; if (!TE.on || !D) return; const [x, y] = rel(e); D.mouse = [x, y];
+    if (down && !down.moved && Math.abs(x - down.x) + Math.abs(y - down.y) > 5) { down.moved = true; if (down.w != null) teDwSnap(); }
+    if (down && down.w != null) { e.stopImmediatePropagation(); if (down.moved) { Object.assign(D.wp[down.w], llOf(x, y)); for (const i of [down.w - 1, down.w]) if (i >= 0) D.keys[i] = null; } }
+    M.draw(); }, true);
+  cv.addEventListener('pointerup', e => { const D = TE.dw, d = down; down = null; if (!TE.on || !D || !d) return; const [x, y] = rel(e);
+    if (d.w != null) { e.stopImmediatePropagation(); if (d.moved) teDwRoute(); return; }
+    if (d.moved) return;   // that was panning the map
+    if (D.Bpt && D.wp.length) { const q = M.scr(D.Bpt.lat, D.Bpt.lon); if ((q[0] - x) ** 2 + (q[1] - y) ** 2 <= 144) { teDrawDone(); return; } }   // click on B — finish
+    const mg = magnet(x, y) || [x, y]; teDwSnap(); D.wp.push({ ...llOf(mg[0], mg[1]), mode: D.wp.length ? D.mode : undefined }); teDwRoute(); }, true);
+  cv.addEventListener('pointerleave', () => { if (TE.dw) { TE.dw.mouse = null; M.draw(); } });
+  cv.addEventListener('dblclick', e => { if (TE.on && TE.dw) { e.preventDefault(); e.stopImmediatePropagation(); } }, true);   // two quick clicks are two points, not a zoom
+}
+function teDrawOverlay(ctx, P) {
+  const D = TE.dw; if (!D) return;
+  // drawn legs (white casing + accent), legs still routing — dotted straight
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  D.legs.forEach((g, i) => { const a = D.wp[i], b = D.wp[i + 1]; if (!a || !b) return; ctx.beginPath();
+    if (!g) { ctx.setLineDash([2, 7]); ctx.strokeStyle = 'rgba(128,128,128,.9)'; ctx.lineWidth = 2.5; ctx.moveTo(...P(a.lat, a.lon)); ctx.lineTo(...P(b.lat, b.lon)); ctx.stroke(); ctx.setLineDash([]); return; }
+    g.forEach((p, k) => { const q = P(p.lat, p.lon); k ? ctx.lineTo(...q) : ctx.moveTo(...q); });
+    ctx.strokeStyle = isDark() ? 'rgba(0,0,0,.6)' : 'rgba(255,255,255,.95)'; ctx.lineWidth = 8; ctx.stroke();
+    ctx.setLineDash(b.mode === 'line' ? [9, 6] : []); ctx.strokeStyle = cssv('--acc'); ctx.lineWidth = 4.5; ctx.stroke(); ctx.setLineDash([]); });
+  const lastW = D.wp[D.wp.length - 1];
+  if (lastW && D.Bpt) { ctx.beginPath(); ctx.setLineDash([2, 7]); ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 2.5; ctx.moveTo(...P(lastW.lat, lastW.lon)); ctx.lineTo(...P(D.Bpt.lat, D.Bpt.lon)); ctx.stroke(); ctx.setLineDash([]); }
+  if (lastW && D.mouse) { ctx.beginPath(); ctx.setLineDash([4, 5]); ctx.strokeStyle = cssv('--acc'); ctx.globalAlpha = .6; ctx.lineWidth = 2; ctx.moveTo(...P(lastW.lat, lastW.lon)); ctx.lineTo(...D.mouse); ctx.stroke(); ctx.globalAlpha = 1; ctx.setLineDash([]); }
+  const dot = (q, rad, fill, stroke, lw, label) => { ctx.beginPath(); ctx.arc(q[0], q[1], rad, 0, 7); ctx.fillStyle = fill; ctx.fill(); ctx.lineWidth = lw; ctx.strokeStyle = stroke; ctx.stroke();
+    if (label) { ctx.fillStyle = '#fff'; ctx.font = '700 9px "Segoe UI",sans-serif'; ctx.textAlign = 'center'; ctx.fillText(label, q[0], q[1] + 3); ctx.textAlign = 'left'; } };
+  D.wp.forEach((w, i) => { if (w.fixed || i === 0) return; dot(P(w.lat, w.lon), 4, '#fff', cssv('--acc'), 2); });
+  if (D.wp[0]) dot(P(D.wp[0].lat, D.wp[0].lon), 8, '#16a34a', '#fff', 2.5, 'A');
+  else if (D.mouse) { ctx.globalAlpha = .55; dot(D.mouse, 8, '#16a34a', '#fff', 2.5, 'A'); ctx.globalAlpha = 1; }
+  if (D.Bpt) dot(P(D.Bpt.lat, D.Bpt.lon), 8, '#dc2626', '#fff', 2.5, 'B');
 }
 // ---- подозрительные места: облака точек на стоянках, одиночные выбросы, трек в стороне от дорог
 function teFindIssues() {
@@ -1931,7 +1872,22 @@ function teFindIssues() {
   }
   out.sort((x, y) => x.a - y.a); TE.issues = out; TE.issK = 0; teIssUi(false);   // only the card updates; the map moves on «‹ ›» / «Исправить»
 }
-let teIssT = 0; function teIssuesStale() { clearTimeout(teIssT); teIssT = setTimeout(() => { if (TE.on) { const k = TE.issK; teFindIssues(); TE.issK = Math.min(k, Math.max(0, TE.issues.length - 1)); teIssUi(false); } }, 400); }
+// ---- unfinished track edit survives closing the program: a draft of changed positions, offered on the next «Править трек»
+let teDrT = 0;
+function teDraftSave() { clearTimeout(teDrT); teDrT = setTimeout(async () => { if (!TE.on || !TE.f) return;
+  const diff = teChanged().map(i => TE.pos[i] ? [i, TE.pos[i].lat, TE.pos[i].lon] : [i]), k = 'td:' + fpOf(TE.f);
+  try { await idb('readwrite', st => diff.length ? st.put({ at: Date.now(), n: TE.pos.length, diff, pins: [...TE.pins] }, k) : st.delete(k)); } catch (e) {} }, 1000); }
+async function teDraftClear(f) { clearTimeout(teDrT); try { await idb('readwrite', st => st.delete('td:' + fpOf(f))); } catch (e) {} }
+async function teDraftOffer() {
+  let d = null; try { d = await idb('readonly', st => st.get('td:' + fpOf(TE.f))); } catch (e) {}
+  if (!d || !TE.on || d.n !== TE.pos.length || !d.diff.length) return;
+  const en = VF_I18N.lang === 'en', when = new Date(d.at).toLocaleString(en ? 'en-GB' : 'ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  toastAct(en ? `Unfinished track edit from ${when} (${d.diff.length} points).` : `Есть незаконченная правка трека от ${when} (${d.diff.length} точек).`, [
+    [en ? 'Continue' : 'Продолжить', () => { if (!TE.on) return; teSnap(); for (const [i, lat, lon] of d.diff) TE.pos[i] = lat == null ? null : { lat, lon };
+      TE.pins = new Set(d.pins || []); teVerts(); teUi(); M.draw(); teIssuesStale(); }],
+    [en ? 'Discard' : 'Отбросить', () => teDraftClear(TE.f)]], 20000);
+}
+let teIssT = 0; function teIssuesStale() { teDraftSave(); clearTimeout(teIssT); teIssT = setTimeout(() => { if (TE.on) { const k = TE.issK; teFindIssues(); TE.issK = Math.min(k, Math.max(0, TE.issues.length - 1)); teIssUi(false); } }, 400); }
 function teIssUi(go = true) {
   const box = $('teIssues'), L = TE.issues; box.style.display = TE.on && L.length ? 'flex' : 'none'; if (!L.length) { M.draw(); return; }
   const g = L[TE.issK]; $('teIssN').textContent = `${TE.issK + 1} из ${L.length}`; $('teIssTxt').textContent = g.txt;
@@ -1952,6 +1908,7 @@ $('teIssFix').onclick = async () => {
 };
 function teOverlay(ctx, P) {
   if (!TE.on || TE.peek) return;
+  if (TE.dw) { teDrawOverlay(ctx, P); return; }
   const g = TE.issues[TE.issK];
   if (g && $('teIssues').style.display !== 'none') { ctx.strokeStyle = cssv('--warn'); ctx.lineWidth = 12; ctx.globalAlpha = .35; ctx.beginPath(); let st = false;
     for (let i = g.a; i <= g.b; i++) { const p = TE.pos[i]; if (!p) { st = false; continue; } const q = P(p.lat, p.lon); st ? ctx.lineTo(...q) : ctx.moveTo(...q); st = true; }
@@ -1970,7 +1927,7 @@ function teOverlay(ctx, P) {
   if (TE.tool === 'erase' && TE.hover) { ctx.beginPath(); ctx.arc(TE.hover.x, TE.hover.y, TE.ER, 0, 7); ctx.fillStyle = cssv('--bad'); ctx.globalAlpha = .15; ctx.fill(); ctx.globalAlpha = 1; ctx.strokeStyle = cssv('--bad'); ctx.lineWidth = 1.5; ctx.stroke(); }
 }
 
-window.__velofix = { S, M, selectFix, fixList, addFiles, ED, openEditor, TE, teStart, teApply, teSnapAll, teFindIssues, teUndo, teRedo, teSave, localRoute, ROADS, routeLeg, healRoads, astar, ensureCells, nearestEdge };
+window.__velofix = { S, M, cur, showCurrent, selectFix, fixList, addFiles, stravaIssues, stravaGate, TE, teStart, teStop, teApply, teDrawStart, teDrawDone, teDrawCancel, teDwRoute, teNextGap, teTool, teSnapAll, teFindIssues, teUndo, teRedo, teSave, localRoute, ROADS, routeLeg, healRoads, astar, ensureCells, nearestEdge };
 })();
 </script>
 </body>

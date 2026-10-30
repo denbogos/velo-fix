@@ -902,6 +902,62 @@ const VF = (() => {
     return out;
   }
 
-  return { amax, amin, merge, parseFit, parseGpx, gpxToFit, run, toGpx, toTcx, toCsv, toReport, zip, hav, FIT_EPOCH, SC, hms };
+  // ---------- «готово для Strava»: what Strava rejects or does not count, located on the track ----------
+  // fast    — the track moves faster than a bike (> 70 km/h) and faster than the wheel: segment efforts get excluded;
+  // squeeze — over ≥ 300 m the track is ≥ 1.4× longer than the wheel says (a drawn line squeezed into too few records);
+  // nogps   — records without coordinates inside the ride: Strava draws a straight line and counts no segments there.
+  function stravaCheck(res) {
+    const { N, R, newLL, trimmed } = res, D = res.hasDist ? res.finalDist : null, gone = new Set(res.dups || []);
+    const keep = i => !(trimmed && trimmed[i]) && !gone.has(i), has = i => newLL[i] && newLL[i].lat != null;
+    const fast = new Array(N).fill(false), step = [];
+    let prev = -1;
+    for (let i = 0; i < N; i++) {
+      if (!keep(i)) continue;
+      if (prev >= 0 && has(i) && has(prev)) {
+        const dt = Math.max(1, R[i].t - R[prev].t), g = hav(newLL[prev].lat, newLL[prev].lon, newLL[i].lat, newLL[i].lon);
+        const o = D && D[i] != null && D[prev] != null ? Math.max(0, D[i] - D[prev]) : null;
+        if (g / dt * 3.6 > 70 && (o == null || g > 1.6 * o + 15)) fast[i] = true;
+        if (o != null && dt <= 5) step.push({ i, g, o });
+      }
+      prev = i;
+    }
+    const out = [];
+    const group = (flag, gapOk, make) => { let a = -1, b = -1;
+      const flush = () => { if (a >= 0) out.push(make(a, b)); a = b = -1; };
+      for (let i = 0; i < N; i++) { if (!flag[i]) continue; if (a >= 0 && i - b <= gapOk) b = i; else { flush(); a = b = i; } }
+      flush(); };
+    const vmax = (a, b) => { let m = 0; for (let i = Math.max(1, a); i <= b; i++) { let p = i - 1; while (p > 0 && (!keep(p) || !has(p))) p--; if (has(i) && has(p)) m = Math.max(m, hav(newLL[p].lat, newLL[p].lon, newLL[i].lat, newLL[i].lon) / Math.max(1, R[i].t - R[p].t) * 3.6); } return Math.round(m); };
+    group(fast, 10, (a, b) => { let n = 0; for (let i = a; i <= b; i++) if (fast[i]) n++;
+      return n >= 3 ? { type: 'fast', level: 'bad', a: Math.max(0, a - 1), b, n, vmax: vmax(a, b), txt: `Трек «летит» до ${vmax(a, b)} км/ч — Strava исключит участки здесь` }
+        : { type: 'fast', level: 'warn', a: Math.max(0, a - 1), b, n, vmax: vmax(a, b), txt: `Скачок GPS ${vmax(a, b)} км/ч (${n === 1 ? 'одна точка' : n + ' точки'}) — обычно не мешает, но можно поправить` }; });
+    // squeeze: windows of ≥ 300 m by the wheel
+    const sq = new Array(N).fill(false);
+    for (let s = 0, e = 0, gs = 0, os = 0; e < step.length; e++) {
+      gs += step[e].g; os += step[e].o;
+      while (s < e && os - step[s].o >= 300) { gs -= step[s].g; os -= step[s].o; s++; }
+      if (os >= 300 && gs > 1.4 * os) for (let k = s; k <= e; k++) if (step[k].g > 1.2 * step[k].o + 2) sq[step[k].i] = true;
+    }
+    for (let i = 0; i < N; i++) if (fast[i]) sq[i] = false;
+    group(sq, 10, (a, b) => { let g = 0, o = 0, n = 0; for (const st of step) if (st.i >= a && st.i <= b) { g += st.g; o += st.o; if (sq[st.i]) n++; }
+      return { type: 'squeeze', level: n >= 5 ? 'bad' : 'info', a: Math.max(0, a - 1), b, n, ratio: o ? g / o : null, txt: `Трек в ${(g / Math.max(1, o)).toFixed(1).replace('.', ',')} раза длиннее пройденного по датчику — линия сжата, скорость завышена` }; });
+    // nogps inside the ride
+    let first = -1, last = -1; for (let i = 0; i < N; i++) if (keep(i) && has(i)) { if (first < 0) first = i; last = i; }
+    const ng = new Array(N).fill(false); for (let i = first + 1; i < last; i++) if (keep(i) && !has(i)) ng[i] = true;
+    group(ng, 1, (a, b) => ({ type: 'nogps', level: b - a >= 15 ? 'warn' : 'info', a: a - 1, b: b + 1, n: b - a + 1,
+      txt: `Нет координат: ${b - a + 1} записей${D ? ', ' + ((D[b + 1] - D[a - 1]) / 1000).toFixed(1).replace('.', ',') + ' км' : ''} — Strava проведёт прямую и не засчитает участки` }));
+    out.sort((x, y) => x.a - y.a);
+    // one broken stretch shows up as alternating «fast» and «squeeze» pieces — report it once
+    const merged = [];
+    for (const x of out.filter(x => x.level !== 'info')) { const p = merged[merged.length - 1];
+      if (p && x.level === 'bad' && p.level === 'bad' && x.type !== 'nogps' && p.type !== 'nogps' && x.a - p.b <= 30) {
+        p.b = Math.max(p.b, x.b); p.vmax = Math.max(p.vmax || 0, x.vmax || 0) || undefined; p.ratio = Math.max(p.ratio || 0, x.ratio || 0) || undefined; if (x.type === 'fast') p.type = 'fast'; p.n = (p.n || 0) + (x.n || 0); p.joined = true;
+      } else merged.push({ ...x }); }
+    for (const p of merged) if (p.joined) { let g = 0, o = 0; for (const st of step) if (st.i > p.a && st.i <= p.b) { g += st.g; o += st.o; }
+      p.ratio = o ? g / o : p.ratio; p.vmax = vmax(p.a + 1, p.b);
+      p.txt = `Трек «летит» до ${p.vmax} км/ч${p.ratio > 1.3 ? ` и в ${p.ratio.toFixed(1).replace('.', ',')} раза длиннее пройденного` : ''} — Strava исключит участки здесь`; delete p.joined; }
+    return merged;
+  }
+
+  return { amax, amin, merge, parseFit, parseGpx, gpxToFit, run, stravaCheck, toGpx, toTcx, toCsv, toReport, zip, hav, FIT_EPOCH, SC, hms };
 })();
 if (typeof module !== 'undefined') module.exports = VF;

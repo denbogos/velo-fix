@@ -9,55 +9,8 @@ function test(name, fn) {
   try { fn(); } catch (e) { T.fail++; T.lines.push(`FAIL  ${name}  — исключение: ${e && e.message}`); }
 }
 
-// ---------- генератор FIT ----------
-const CT = [0x0000, 0xCC01, 0xD801, 0x1400, 0xF001, 0x3C00, 0x2800, 0xE401, 0xA001, 0x6C00, 0x7800, 0xB401, 0x5000, 0x9C01, 0x8801, 0x4400];
-function crc16(b, s, e) { let c = 0; for (let i = s; i < e; i++) { let t = CT[c & 0xF]; c = (c >> 4) & 0x0FFF; c = c ^ t ^ CT[b[i] & 0xF]; t = CT[c & 0xF]; c = (c >> 4) & 0x0FFF; c = c ^ t ^ CT[(b[i] >> 4) & 0xF]; } return c; }
-const T0 = 1100000000; // время FIT (сек от 1989-12-31)
-const LAT0 = 55.75, LON0 = 37.62, SC = 180 / 2 ** 31;
+// генератор FIT (mkFit, ride, T0, LAT0, LON0) — tests/fitgen.js
 
-/**
- * recs: [{t, lat, lon, dist(м), spd(м/с), hr, cad}] — null = поле не записано (invalid).
- * opt.compressed: записи без поля 253 со сжатым заголовком времени.
- * opt.extra: функция(body helpers) для добавления своих сообщений.
- */
-function mkFit(recs, opt = {}) {
-  const body = [];
-  const u8 = v => body.push(v & 255), u16 = v => { u8(v); u8(v >> 8); }, u32 = v => { u16(v & 0xFFFF); u16(Math.floor(v / 65536) & 0xFFFF); };
-  const i32 = v => u32(v < 0 ? v + 4294967296 : v);
-  const def = (local, g, fields) => { u8(0x40 | local); u8(0); u8(0); u16(g); u8(fields.length); for (const f of fields) { u8(f[0]); u8(f[1]); u8(f[2]); } };
-  def(0, 0, [[0, 1, 0x00], [4, 4, 0x86]]); u8(0); u8(4); u32(recs[0].t);
-  def(2, 21, [[253, 4, 0x86], [0, 1, 0x00], [1, 1, 0x00]]); u8(2); u32(recs[0].t); u8(0); u8(0);
-  const recFields = [[0, 4, 0x85], [1, 4, 0x85], [5, 4, 0x86], [6, 2, 0x84], [3, 1, 0x02], [4, 1, 0x02]];
-  def(1, 20, opt.compressed ? recFields : [[253, 4, 0x86], ...recFields]);
-  for (const r of recs) {
-    if (opt.compressed) u8(0x80 | (1 << 5) | (r.t & 0x1F)); else { u8(1); u32(r.t); }
-    if (r.lat == null) { u32(0x7FFFFFFF); u32(0x7FFFFFFF); } else { i32(Math.round(r.lat / SC)); i32(Math.round(r.lon / SC)); }
-    u32(r.dist == null ? 0xFFFFFFFF : Math.round(r.dist * 100));
-    u16(r.spd == null ? 0xFFFF : Math.round(r.spd * 1000));
-    u8(r.hr == null ? 0xFF : r.hr); u8(r.cad == null ? 0xFF : r.cad);
-  }
-  if (opt.extra) opt.extra({ u8, u16, u32, def });
-  const last = recs[recs.length - 1], dist = recs.reduce((m, r) => r.dist != null ? r.dist : m, 0);
-  u8(2); u32(last.t); u8(0); u8(4);
-  def(3, 18, [[253, 4, 0x86], [2, 4, 0x86], [7, 4, 0x86], [8, 4, 0x86], [9, 4, 0x86], [14, 2, 0x84], [15, 2, 0x84]]);
-  const el = last.t - recs[0].t, mx = recs.reduce((m, r) => Math.max(m, r.spd ?? 0), 0);
-  u8(3); u32(last.t); u32(recs[0].t); u32(el * 1000); u32(el * 1000); u32(Math.round(dist * 100)); u16(Math.round(dist / Math.max(1, el) * 1000)); u16(Math.min(65534, Math.round(mx * 1000)));
-  const out = new Uint8Array(14 + body.length + 2), dv = new DataView(out.buffer);
-  out[0] = 14; out[1] = 0x20; dv.setUint16(2, 2132, true); dv.setUint32(4, body.length, true); out.set([46, 70, 73, 84], 8);
-  dv.setUint16(12, crc16(out, 0, 12), true); out.set(body, 14); dv.setUint16(14 + body.length, crc16(out, 0, 14 + body.length), true);
-  return out;
-}
-
-// ровная езда на север 7 м/с, запись раз в секунду
-function ride(n, f) {
-  const recs = []; let dist = 0;
-  for (let i = 0; i < n; i++) {
-    const r = { t: T0 + i, lat: LAT0 + dist / 111195, lon: LON0, dist, spd: 7, hr: 140, cad: 85 };
-    if (f) f(r, i);
-    recs.push(r); dist += 7;
-  }
-  return recs;
-}
 const failed = res => res.checks.list.filter(c => !c.pass && !c.info).map(c => c.name);
 
 // ---------- тесты ----------
@@ -126,6 +79,31 @@ test('Склейка двух файлов', () => {
   ok('Склейка: записей 600, CRC верна', res.R.length === 600 && res.fit2.crcOk, `${res.R.length}`);
 });
 
+// ---------- «готово для Strava» ----------
+test('Проверка для Strava: чистый заезд без замечаний', () => {
+  const r = VF.stravaCheck(VF.run(mkFit(ride(600)), []));
+  ok('Чистый заезд: замечаний нет', r.length === 0, r.map(x => x.type).join(','));
+});
+// нарисованная линия, уложенная в слишком мало записей (так сломался реальный файл 29.10)
+const squeezed = k => { const recs = ride(600), A = recs[100], B = recs[200], L = 700 * k;
+  // «треугольник» A → P → B длиной L: A и B в 700 м друг от друга по меридиану, P сбоку
+  const h = Math.sqrt((L / 2) ** 2 - 350 ** 2) / (111320 * Math.cos(A.lat * Math.PI / 180)), P = { lat: (A.lat + B.lat) / 2, lon: A.lon + h };
+  const pts = []; for (let s = 0; s <= 40; s++) { const u = s / 40, [p, q, v] = u <= 0.5 ? [A, P, u * 2] : [P, B, u * 2 - 1]; pts.push({ lat: p.lat + v * (q.lat - p.lat), lon: p.lon + v * (q.lon - p.lon) }); }
+  return VF.stravaCheck(VF.run(mkFit(recs), [], { edits: [{ type: 'route', t0: A.t, t1: B.t, pts, src: 'нарисовано вручную' }] })); };
+test('Проверка для Strava: линия сжата в 4 раза', () => {
+  const r = squeezed(4), f = r.find(x => x.type === 'fast');
+  ok('Сжатие ×4: найден «трек летит» на участке 100–200', f && f.a >= 95 && f.b <= 205 && f.vmax > 70, JSON.stringify(r.map(x => [x.type, x.a, x.b, x.vmax])));
+});
+test('Проверка для Strava: линия сжата в 2 раза (50 км/ч — по скорости не видно)', () => {
+  const r = squeezed(2), s = r.find(x => x.type === 'squeeze');
+  ok('Сжатие ×2: найдено «сжатие»', s && s.a >= 95 && s.b <= 205 && s.ratio > 1.7, JSON.stringify(r.map(x => [x.type, x.a, x.b, x.ratio])));
+});
+test('Проверка для Strava: пропуск без координат', () => {
+  const r = VF.stravaCheck(VF.run(mkFit(ride(600, (x, i) => { if (i >= 300 && i < 340) { x.lat = null; x.lon = null; } })), [], { fillStraight: false }));
+  const g = r.find(x => x.type === 'nogps');
+  ok('Пропуск 40 записей найден', g && g.n === 40 && g.level === 'warn', JSON.stringify(r));
+});
+
 // реальные файлы (tests/fixtures/*.fit, в репозиторий не попадают): только «не падает и самопроверки»
 for (const [name, b64] of Object.entries(window.FIXTURES || {})) {
   test('Реальный файл ' + name, () => {
@@ -133,6 +111,8 @@ for (const [name, b64] of Object.entries(window.FIXTURES || {})) {
     const res = VF.run(bytes, []);
     ok(`${name}: обработан, CRC верна`, res.fit2.crcOk, `${res.N} записей`);
     ok(`${name}: самопроверки`, failed(res).length === 0, failed(res).join('; '));
+    const bad = VF.stravaCheck(res).filter(x => x.level === 'bad');
+    ok(`${name}: проверка для Strava без ложных тревог`, bad.length === 0, bad.map(x => `${x.type} ${x.a}-${x.b} ${x.vmax ?? (x.ratio || 0).toFixed(2)}`).join('; '));
   });
 }
 
