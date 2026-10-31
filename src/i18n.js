@@ -294,6 +294,9 @@ const VF_I18N = (() => {
     ['Записи без координат', 'Records without coordinates'],
     // 3.0: «готово для Strava», единый редактор, сохранение правок
     ['Тянуть трек мышью, дорисовать пропуски, перерисовать куски', 'Drag the track, draw GPS gaps, redraw pieces'],
+    ['Щёлкните, откуда начать — с любого места, хоть с того конца. Линия сама соединится с A и B', 'Click where to start — anywhere, even from the far end. The line joins A and B by itself'],
+    ['Ставьте точки по пути · Enter или щелчок по A / B — готово · правый клик по точке — убрать · карту можно двигать', 'Place points along the way · Enter or click A / B — done · right-click a point — remove · the map can be dragged'],
+    ['Фиолетовое «нет GPS» — щёлкните по нему, чтобы дорисовать · ', 'Violet “no GPS” — click it to draw · '], ['Щёлкните, где начали поездку', 'Click where the ride started'], ['нет GPS', 'no GPS'],
     ['Готово для Strava', 'Ready for Strava'], ['Strava отклонит участки', 'Strava will exclude segments'], ['Проверка для Strava', 'Strava check'], ['Показать', 'Show'], ['Править', 'Edit'],
     ['Трек «летит» до', 'The track “flies” at up to'], ['км/ч — Strava исключит участки здесь', 'km/h — Strava will exclude the segments here'], ['раза длиннее пройденного', 'times longer than ridden'],
     ['раза длиннее пройденного по датчику — линия сжата, скорость завышена', 'times longer than the wheel says — the line is squeezed, speed is too high'], ['Трек в', 'The track is'],

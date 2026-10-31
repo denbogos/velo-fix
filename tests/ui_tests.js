@@ -60,7 +60,7 @@
     V.teDrawStart(g[0], g[1]); await sleep(100); TE.dw.mode = 'line';
     const A = TE.pos[g[0]], B = TE.pos[g[1]];
     for (const u of [0.3, 0.6]) clickLL(A.lat + (B.lat - A.lat) * u, A.lon + (B.lon - A.lon) * u + 0.0003);
-    await sleep(100); ok('Поставлены точки', TE.dw && TE.dw.wp.length === 3, TE.dw && `${TE.dw.wp.length}`);
+    await sleep(100); ok('Поставлены точки, к A ничего не прицеплено', TE.dw && TE.dw.wp.length === 2, TE.dw && `${TE.dw.wp.length}`);
     await V.teDrawDone(); let empty = 0; for (let i = g[0]; i <= g[1]; i++) if (!TE.pos[i]) empty++;
     ok('В пропуске не осталось записей без координат', empty === 0, `${empty}`);
     await V.teSave(false); await sleep(300);
@@ -69,7 +69,22 @@
     ok('Проверка для Strava: проблем нет', V.stravaIssues(V.cur()).filter(x => x.level === 'bad').length === 0);
   });
 
+  await uiTest('Рисую с другого конца (от B к A) — линия разворачивается сама', async () => {
+    await loadRide(gapRide(800, 300, 420), 'ui-rev.fit');
+    V.teStart(); await sleep(200); const g = V.teNextGap(0);
+    V.teDrawStart(g[0], g[1]); await sleep(100); TE.dw.mode = 'line';
+    const A = TE.pos[g[0]], B = TE.pos[g[1]];
+    for (const u of [0.8, 0.5, 0.2]) clickLL(A.lat + (B.lat - A.lat) * u, A.lon + 0.0004);   // from B towards A, beside the old line
+    await V.teDrawDone();
+    let back = 0; for (let i = g[0] + 1; i <= g[1]; i++) if (TE.pos[i] && TE.pos[i - 1] && TE.pos[i].lat < TE.pos[i - 1].lat - 1e-7) back++;
+    ok('Записи идут от A к B (север), а не назад', back === 0, `шагов назад: ${back}`);
+    ok('Линия прошла по нарисованному (сбоку от старой)', Math.abs(TE.pos[g[0] + 60].lon - (A.lon + 0.0004)) < 0.0002);
+    TE.on = false;
+  });
+
   await uiTest('Правки файла возвращаются при повторном открытии', async () => {
+    await V.addFiles([new File([mkFit(gapRide(800, 300, 420))], 'ui-gap.fit')]); await sleep(300);
+    V.cur().edits = V.cur().edits.length ? V.cur().edits : [{ type: 'del', t0: V.cur().res.R[50].t, t1: V.cur().res.R[60].t }]; V.cur().res = null; V.showCurrent();
     await sleep(1200);   // сохранение правок — через 0,8 с
     const n0 = V.cur().edits.length;
     await V.addFiles([new File([mkFit(gapRide(800, 300, 420))], 'ui-gap.fit')]); await sleep(300);

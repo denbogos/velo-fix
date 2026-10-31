@@ -1614,12 +1614,12 @@ function teUi() {
     document.querySelectorAll('#teDMode button').forEach(b => b.classList.toggle('on', b.dataset.m === D.mode));
     $('teDBusy').style.display = D.routing ? 'inline' : 'none'; $('teDUndo').disabled = !D.undo.length;
     $('teHint').textContent = TE.peek ? VF_I18N.tr('Показан исходный трек — отпустите пробел')
-      : !D.wp.length ? VF_I18N.tr(D.Bpt ? 'Щёлкните, где начали поездку — это старт A, дальше ставьте точки до B' : 'Щёлкните, откуда рисовать')
-      : VF_I18N.tr(D.Bpt ? 'Ставьте точки по пути · щелчок по B или Enter — готово · правый клик по точке — убрать · карту можно двигать' : 'Ставьте точки до финиша · Enter — готово · правый клик по точке — убрать');
-    const L = teDwLen(), lw = D.wp[D.wp.length - 1], rest = lw && D.Bpt ? VF.hav(lw.lat, lw.lon, D.Bpt.lat, D.Bpt.lon) : 0, T = D.target, tot = L + rest;
+      : !D.wp.length ? VF_I18N.tr(D.Apt || D.Bpt ? 'Щёлкните, откуда начать — с любого места, хоть с того конца. Линия сама соединится с A и B' : 'Щёлкните, где начали поездку')
+      : VF_I18N.tr('Ставьте точки по пути · Enter или щелчок по A / B — готово · правый клик по точке — убрать · карту можно двигать');
+    const L = teDwLen(), T = D.target, tot = L;
     const okc = T && D.wp.length > 1 ? (Math.abs(tot / T - 1) <= 0.08 ? '--ok' : Math.abs(tot / T - 1) <= 0.3 ? '--warn' : '--bad') : null;
     $('teStat').innerHTML = (en ? 'Drawn ' : 'Нарисовано ') + `<b>${fmt(L / 1000, 2)} ${en ? 'km' : 'км'}</b>` + (T ? (en ? ' of ' : ' из ') + `<b style="${okc ? 'color:var(' + okc + ')' : ''}">${fmt(T / 1000, 2)} ${en ? 'km' : 'км'}</b> ${en ? 'by the wheel' : 'по датчику'}` : '')
-      + (D.Bpt && rest > 30 ? ` · ${en ? 'to B' : 'до B'} ${rest >= 1000 ? fmt(rest / 1000, 1) + (en ? ' km' : ' км') : Math.round(rest) + (en ? ' m' : ' м')}` : '');
+      + (D.wp.length && (D.Apt || D.Bpt) ? ` <span class="mute">${en ? '+ joining to A/B' : '+ соединение с A/B'}</span>` : '');
     return; }
   document.querySelectorAll('#teTool button').forEach(b => b.classList.toggle('on', b.dataset.t === TE.tool));
   $('teR').textContent = TE.tool === 'erase' ? TE.ER * 2 + ' px' : TE.R >= 1000 ? fmt(TE.R / 1000, 1) + ' км' : TE.R + ' м';
@@ -1627,7 +1627,7 @@ function teUi() {
   $('teSelOps').style.display = TE.sel ? 'flex' : 'none';
   $('teUndo').disabled = !TE.undo.length; $('teRedo').disabled = !TE.redo.length; $('teSnapAll').disabled = TE.busy;
   $('teHint').textContent = TE.peek ? 'Показан исходный трек — отпустите пробел'
-    : TE.tool === 'drag' ? 'Тяните трек или точку · Shift+колёсико или [ ] — размер кисти · двойной щелчок — точка излома · правый клик по точке — убрать'
+    : TE.tool === 'drag' ? (teStraightRuns().length ? 'Фиолетовое «нет GPS» — щёлкните по нему, чтобы дорисовать · ' : '') + 'Тяните трек или точку · Shift+колёсико или [ ] — размер кисти · двойной щелчок — точка излома · правый клик по точке — убрать'
     : TE.tool === 'erase' ? 'Проведите по лишним точкам · Shift+колёсико или [ ] — размер ластика'
     : TE.sel ? 'Что сделать с выделенным куском? (G — к дороге, R — по дорогам, L — прямо, Del — стереть)'
     : TE.selA != null ? 'Щёлкните по треку — конец куска' : 'Проведите по треку с зажатой кнопкой или выделите на графике снизу';
@@ -1689,6 +1689,7 @@ PF.cv.addEventListener('pointerup', () => { if (!TE.on || !S.sel) return; TE.too
       if (TE.selA != null && !TE.sel) { TE.sel = [Math.min(TE.selA, i), Math.max(TE.selA, i)]; TE.selA = null; if (TE.sel[1] - TE.sel[0] < 2) TE.sel = null; TE.selDrag = null; }
       else { TE.sel = null; TE.selA = i; TE.selDrag = { i0: i, moved: false }; }
       teUi(); M.draw(); return; }
+    if (TE.tool === 'drag' && teHitVert(x, y) == null) { const g = teBandAt(x, y); if (g) { e.stopImmediatePropagation(); teDrawStart(g.a, g.b); return; } }   // click on «нет GPS» — draw it
     const v = teHitVert(x, y), i = v ?? teHit(x, y); if (i == null) return;
     e.stopImmediatePropagation(); cv.setPointerCapture(e.pointerId);
     let lo = i, hi = i; if (v != null) { const k = TE.verts.indexOf(v); lo = TE.verts[k - 1] ?? v; hi = TE.verts[k + 1] ?? v; }
@@ -1745,14 +1746,17 @@ function teDrawStart(a, b) {
   if (!TE.on) teStart(); if (!TE.on) return;
   const N = TE.pos.length; a = Math.max(0, a); b = Math.min(N - 1, b);
   const noA = !TE.pos[a], noB = !TE.pos[b];
-  const D = TE.dw = { a, b, noA, noB, mode: store.get('edMode', 'free'), legs: [], keys: [], undo: [], mouse: null,
-    wp: noA ? [] : [{ lat: TE.pos[a].lat, lon: TE.pos[a].lon, fixed: true }], Bpt: noB ? null : { lat: TE.pos[b].lat, lon: TE.pos[b].lon },
+  // nothing is attached on start: the line begins where you click first and can go in either direction;
+  // on «Готово» it is turned the right way and its ends are joined to the ends of the gap (A, B)
+  const gap = []; for (let i = a; i <= b; i++) if (TE.pos[i]) gap.push(TE.pos[i]);   // what is there now (a straight line or a bad stretch)
+  const D = TE.dw = { a, b, noA, noB, mode: store.get('edMode', 'free'), legs: [], keys: [], undo: [], mouse: null, wp: [], gap,
+    Apt: noA ? null : { lat: TE.pos[a].lat, lon: TE.pos[a].lon }, Bpt: noB ? null : { lat: TE.pos[b].lat, lon: TE.pos[b].lon },
     target: TE.r.hasDist ? teDist(b) - teDist(a) : null };
   TE.sel = null; TE.selA = null; TE.hover = null; TE.tool = 'draw';
   // view: both ends of the stretch; with one end unknown — the area within reach of the known one
-  const ends = [D.wp[0], D.Bpt].filter(Boolean);
-  if (ends.length) { let s = 90, n = -90, w = 180, e = -180; for (const p of ends) { s = Math.min(s, p.lat); n = Math.max(n, p.lat); w = Math.min(w, p.lon); e = Math.max(e, p.lon); }
-    if (ends.length < 2) { const R = Math.min(8000, Math.max(800, (D.target || 3000) * 0.5)), dl = R / 110540, dw = R / (111320 * Math.cos(ends[0].lat * Math.PI / 180)); s -= dl; n += dl; w -= dw; e += dw; }
+  const ends = [D.Apt, D.Bpt].filter(Boolean), view = [...ends, ...gap];
+  if (ends.length) { let s = 90, n = -90, w = 180, e = -180; for (const p of view) { s = Math.min(s, p.lat); n = Math.max(n, p.lat); w = Math.min(w, p.lon); e = Math.max(e, p.lon); }
+    if (view.length < 2) { const R = Math.min(8000, Math.max(800, (D.target || 3000) * 0.5)), dl = R / 110540, dw = R / (111320 * Math.cos(ends[0].lat * Math.PI / 180)); s -= dl; n += dl; w -= dw; e += dw; }
     if (n - s < 0.004) { s -= 0.002; n += 0.002; } if (e - w < 0.006) { w -= 0.003; e += 0.003; }
     Object.assign(M, M.fitBox({ s, n, w, e }, M.w, M.h, 110, 17)); }
   for (const p of ends) ensureCells(p.lat - 0.003, p.lon - 0.005, p.lat + 0.003, p.lon + 0.005, roadsProgress).catch(() => {});
@@ -1782,18 +1786,24 @@ function teNextGap(from) { // next stretch without coordinates after `from` → 
 }
 async function teDrawDone() {
   const D = TE.dw; if (!D) return; const en = VF_I18N.lang === 'en';
-  const last = D.wp[D.wp.length - 1]; let addedB = false;
-  if (D.Bpt && last && VF.hav(last.lat, last.lon, D.Bpt.lat, D.Bpt.lon) > 3) { D.wp.push({ ...D.Bpt, fixed: true, mode: D.mode }); addedB = true; teDwRoute(); }
-  if (D.wp.length < 2) { toast(en ? 'Place at least one point' : 'Поставьте хотя бы одну точку'); return; }
+  if (!D.wp.length || (D.wp.length < 2 && !D.Apt && !D.Bpt)) { toast(en ? 'Place points where you rode' : 'Поставьте точки там, где вы ехали'); return; }
   for (let k = 0; k < 800 && D.legs.some(g => !g); k++) await new Promise(r => setTimeout(r, 150));   // routing of the last legs
   if (TE.dw !== D) return;
-  const line = []; for (const g of D.legs) for (const p of g || []) { const q = line[line.length - 1]; if (!q || q.lat !== p.lat || q.lon !== p.lon) line.push({ lat: p.lat, lon: p.lon }); }
+  let line = [{ lat: D.wp[0].lat, lon: D.wp[0].lon }];
+  for (const g of D.legs) for (const p of g || []) { const q = line[line.length - 1]; if (!q || q.lat !== p.lat || q.lon !== p.lon) line.push({ lat: p.lat, lon: p.lon }); }
+  // drawn from B towards A? turn it the right way (records go from A to B)
+  const dd = (p, q) => p && q ? VF.hav(p.lat, p.lon, q.lat, q.lon) : 0;
+  if (dd(line[0], D.Apt) + dd(line[line.length - 1], D.Bpt) > dd(line[line.length - 1], D.Apt) + dd(line[0], D.Bpt)) line.reverse();
+  // join the ends of the line to the ends of the gap, along the roads in the chosen mode
+  const join = async (p, q) => { let g = null; try { g = await routeLeg(p, q, D.mode); } catch (e) {} return g && g.length >= 2 ? g : [p, q]; };
+  if (D.Apt && dd(line[0], D.Apt) > 3) line = (await join(D.Apt, line[0])).concat(line.slice(1));
+  if (D.Bpt && dd(line[line.length - 1], D.Bpt) > 3) line = line.concat((await join(line[line.length - 1], D.Bpt)).slice(1));
+  if (TE.dw !== D) return;
   let L = 0; for (let k = 1; k < line.length; k++) L += VF.hav(line[k - 1].lat, line[k - 1].lon, line[k].lat, line[k].lon);
-  if (line.length < 2) { toast(en ? 'Place at least one point' : 'Поставьте хотя бы одну точку'); return; }
+  if (line.length < 2) { toast(en ? 'Place points where you rode' : 'Поставьте точки там, где вы ехали'); return; }
   if (D.target && D.target > 300 && Math.abs(L / D.target - 1) > 0.3 &&
       !confirm(en ? `Drawn ${fmt(L / 1000, 1)} km, but the wheel sensor says ${fmt(D.target / 1000, 1)} km here. Probably the line does not follow where you rode. Use it anyway?`
-        : `Нарисовано ${fmt(L / 1000, 1)} км, а по датчику колеса на этом участке — ${fmt(D.target / 1000, 1)} км. Похоже, линия не там, где вы ехали. Всё равно использовать?`)) {
-    if (addedB) { D.wp.pop(); teDwRoute(); } return; }
+        : `Нарисовано ${fmt(L / 1000, 1)} км, а по датчику колеса на этом участке — ${fmt(D.target / 1000, 1)} км. Похоже, линия не там, где вы ехали. Всё равно использовать?`)) return;
   teSnap(); tePlace(D.a, D.b, line);
   TE.dw = null; TE.tool = 'drag'; teVerts(); teUi(); M.draw(); teIssuesStale();
   const nx = teNextGap(D.b);
@@ -1818,29 +1828,41 @@ $('teDUndo').onclick = teDwUndo; $('teDCancel').onclick = teDrawCancel; $('teDDo
   cv.addEventListener('pointerup', e => { const D = TE.dw, d = down; down = null; if (!TE.on || !D || !d) return; const [x, y] = rel(e);
     if (d.w != null) { e.stopImmediatePropagation(); if (d.moved) teDwRoute(); return; }
     if (d.moved) return;   // that was panning the map
-    if (D.Bpt && D.wp.length) { const q = M.scr(D.Bpt.lat, D.Bpt.lon); if ((q[0] - x) ** 2 + (q[1] - y) ** 2 <= 144) { teDrawDone(); return; } }   // click on B — finish
+    for (const E of [D.Apt, D.Bpt]) if (E && D.wp.length) { const q = M.scr(E.lat, E.lon); if ((q[0] - x) ** 2 + (q[1] - y) ** 2 <= 144) { teDrawDone(); return; } }   // click on A or B — finish there
     const mg = magnet(x, y) || [x, y]; teDwSnap(); D.wp.push({ ...llOf(mg[0], mg[1]), mode: D.wp.length ? D.mode : undefined }); teDwRoute(); }, true);
   cv.addEventListener('pointerleave', () => { if (TE.dw) { TE.dw.mouse = null; M.draw(); } });
   cv.addEventListener('dblclick', e => { if (TE.on && TE.dw) { e.preventDefault(); e.stopImmediatePropagation(); } }, true);   // two quick clicks are two points, not a zoom
 }
 function teDrawOverlay(ctx, P) {
   const D = TE.dw; if (!D) return;
-  // drawn legs (white casing + accent), legs still routing — dotted straight
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  teGapBand(ctx, P, D.gap, true);   // the stretch being replaced: where GPS was lost
+  // drawn legs (white casing + accent), legs still routing — dotted straight
   D.legs.forEach((g, i) => { const a = D.wp[i], b = D.wp[i + 1]; if (!a || !b) return; ctx.beginPath();
     if (!g) { ctx.setLineDash([2, 7]); ctx.strokeStyle = 'rgba(128,128,128,.9)'; ctx.lineWidth = 2.5; ctx.moveTo(...P(a.lat, a.lon)); ctx.lineTo(...P(b.lat, b.lon)); ctx.stroke(); ctx.setLineDash([]); return; }
     g.forEach((p, k) => { const q = P(p.lat, p.lon); k ? ctx.lineTo(...q) : ctx.moveTo(...q); });
     ctx.strokeStyle = isDark() ? 'rgba(0,0,0,.6)' : 'rgba(255,255,255,.95)'; ctx.lineWidth = 8; ctx.stroke();
     ctx.setLineDash(b.mode === 'line' ? [9, 6] : []); ctx.strokeStyle = cssv('--acc'); ctx.lineWidth = 4.5; ctx.stroke(); ctx.setLineDash([]); });
   const lastW = D.wp[D.wp.length - 1];
-  if (lastW && D.Bpt) { ctx.beginPath(); ctx.setLineDash([2, 7]); ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 2.5; ctx.moveTo(...P(lastW.lat, lastW.lon)); ctx.lineTo(...P(D.Bpt.lat, D.Bpt.lon)); ctx.stroke(); ctx.setLineDash([]); }
   if (lastW && D.mouse) { ctx.beginPath(); ctx.setLineDash([4, 5]); ctx.strokeStyle = cssv('--acc'); ctx.globalAlpha = .6; ctx.lineWidth = 2; ctx.moveTo(...P(lastW.lat, lastW.lon)); ctx.lineTo(...D.mouse); ctx.stroke(); ctx.globalAlpha = 1; ctx.setLineDash([]); }
   const dot = (q, rad, fill, stroke, lw, label) => { ctx.beginPath(); ctx.arc(q[0], q[1], rad, 0, 7); ctx.fillStyle = fill; ctx.fill(); ctx.lineWidth = lw; ctx.strokeStyle = stroke; ctx.stroke();
     if (label) { ctx.fillStyle = '#fff'; ctx.font = '700 9px "Segoe UI",sans-serif'; ctx.textAlign = 'center'; ctx.fillText(label, q[0], q[1] + 3); ctx.textAlign = 'left'; } };
-  D.wp.forEach((w, i) => { if (w.fixed || i === 0) return; dot(P(w.lat, w.lon), 4, '#fff', cssv('--acc'), 2); });
-  if (D.wp[0]) dot(P(D.wp[0].lat, D.wp[0].lon), 8, '#16a34a', '#fff', 2.5, 'A');
-  else if (D.mouse) { ctx.globalAlpha = .55; dot(D.mouse, 8, '#16a34a', '#fff', 2.5, 'A'); ctx.globalAlpha = 1; }
-  if (D.Bpt) dot(P(D.Bpt.lat, D.Bpt.lon), 8, '#dc2626', '#fff', 2.5, 'B');
+  D.wp.forEach((w, i) => dot(P(w.lat, w.lon), i === 0 ? 5.5 : 4, i === 0 ? cssv('--acc') : '#fff', i === 0 ? '#fff' : cssv('--acc'), 2));
+  // ends of the gap — just targets: the line is joined to them on «Готово» (or click one to finish there)
+  const ring = (E, col, label) => { if (!E) return; const q = P(E.lat, E.lon); ctx.beginPath(); ctx.arc(q[0], q[1], 9, 0, 7); ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = col; ctx.stroke();
+    ctx.fillStyle = col; ctx.font = '700 10px "Segoe UI",sans-serif'; ctx.textAlign = 'center'; ctx.fillText(label, q[0], q[1] + 3.5); ctx.textAlign = 'left'; };
+  ring(D.Apt, '#16a34a', 'A'); ring(D.Bpt, '#dc2626', 'B');
+}
+// GPS-less stretch filled with a straight line (or being redrawn): a wide violet dashed band with a label
+function teGapBand(ctx, P, pts, strong) {
+  if (!pts || pts.length < 2) return;
+  ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath(); pts.forEach((p, k) => { const q = P(p.lat, p.lon); k ? ctx.lineTo(...q) : ctx.moveTo(...q); });
+  ctx.strokeStyle = '#7c3aed'; ctx.globalAlpha = strong ? .28 : .18; ctx.lineWidth = strong ? 18 : 14; ctx.stroke();
+  ctx.globalAlpha = .95; ctx.setLineDash([10, 8]); ctx.lineWidth = 3; ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+  const m = P(pts[pts.length >> 1].lat, pts[pts.length >> 1].lon), t = VF_I18N.tr('нет GPS');
+  ctx.font = '700 11px "Segoe UI",sans-serif'; const w = ctx.measureText(t).width + 12;
+  ctx.fillStyle = '#7c3aed'; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(m[0] - w / 2, m[1] - 20, w, 17, 8) : ctx.rect(m[0] - w / 2, m[1] - 20, w, 17); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.fillText(t, m[0], m[1] - 7.5); ctx.textAlign = 'left'; ctx.restore();
 }
 // ---- подозрительные места: облака точек на стоянках, одиночные выбросы, трек в стороне от дорог
 function teFindIssues() {
@@ -1906,9 +1928,23 @@ $('teIssFix').onclick = async () => {
   TE.issues.splice(TE.issK, 1); TE.issK = Math.min(TE.issK, Math.max(0, TE.issues.length - 1));
   teVerts(); teUi(); teIssUi(); teIssuesStale();
 };
+// GPS gaps the program filled with a straight line — to be drawn by hand; [{a, b, pts}] (a, b — the ends with GPS)
+function teStraightRuns() {
+  if (!TE.on || !TE.r) return []; const out = [];
+  for (const g of TE.r.runs || []) { if (!/прям/.test(g.method) || g.n <= 3) continue; const a = Math.max(0, g.a - 1), b = Math.min(TE.pos.length - 1, g.b + 1);
+    const pts = []; for (let i = a; i <= b; i++) if (TE.pos[i]) pts.push(TE.pos[i]); if (pts.length >= 2) out.push({ a, b, pts }); }
+  return out;
+}
+function teBandAt(x, y) { // a straight-filled gap under the cursor (within 10 px)
+  for (const g of teStraightRuns()) for (let k = 1; k < g.pts.length; k++) {
+    const [x1, y1] = M.scr(g.pts[k - 1].lat, g.pts[k - 1].lon), [x2, y2] = M.scr(g.pts[k].lat, g.pts[k].lon), dx = x2 - x1, dy = y2 - y1, L2 = dx * dx + dy * dy;
+    const u = L2 ? Math.max(0, Math.min(1, ((x - x1) * dx + (y - y1) * dy) / L2)) : 0; if ((x1 + u * dx - x) ** 2 + (y1 + u * dy - y) ** 2 <= 100) return g; }
+  return null;
+}
 function teOverlay(ctx, P) {
   if (!TE.on || TE.peek) return;
   if (TE.dw) { teDrawOverlay(ctx, P); return; }
+  for (const g of teStraightRuns()) teGapBand(ctx, P, g.pts, false);
   const g = TE.issues[TE.issK];
   if (g && $('teIssues').style.display !== 'none') { ctx.strokeStyle = cssv('--warn'); ctx.lineWidth = 12; ctx.globalAlpha = .35; ctx.beginPath(); let st = false;
     for (let i = g.a; i <= g.b; i++) { const p = TE.pos[i]; if (!p) { st = false; continue; } const q = P(p.lat, p.lon); st ? ctx.lineTo(...q) : ctx.moveTo(...q); st = true; }
