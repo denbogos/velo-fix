@@ -65,7 +65,7 @@
     ok('В пропуске не осталось записей без координат', empty === 0, `${empty}`);
     await V.teSave(false); await sleep(300);
     const r = V.cur().res, e = V.cur().edits.find(x => x.type === 'route');
-    ok('Правка покрывает весь пропуск', e && e.t0 === r.R[299].t && e.t1 === r.R[421].t, e && `${r.R.findIndex(x => x.t === e.t0)}–${r.R.findIndex(x => x.t === e.t1)}`);
+    ok('Правка покрывает весь пропуск', e && e.t0 <= r.R[299].t && e.t1 >= r.R[421].t && e.t1 - e.t0 <= r.R[423].t - r.R[297].t, e && `${r.R.findIndex(x => x.t === e.t0)}–${r.R.findIndex(x => x.t === e.t1)}`);
     ok('Проверка для Strava: проблем нет', V.stravaIssues(V.cur()).filter(x => x.level === 'bad').length === 0);
   });
 
@@ -74,7 +74,12 @@
     V.teStart(); await sleep(200); const g = V.teNextGap(0);
     V.teDrawStart(g[0], g[1]); await sleep(100); TE.dw.mode = 'line';
     const A = TE.pos[g[0]], B = TE.pos[g[1]];
-    for (const u of [0.8, 0.5, 0.2]) clickLL(A.lat + (B.lat - A.lat) * u, A.lon + 0.0004);   // from B towards A, beside the old line
+    clickLL(B.lat, B.lon);   // прямо по B: никакой привязки — это просто точка, рисование продолжается
+    ok('Щелчок по B не завершил рисование', !!TE.dw && TE.dw.wp.length === 1);
+    TE.dw.wp = []; TE.dw.legs = []; TE.dw.keys = [];
+    const pts = [0.8, 0.5, 0.2].map(u => ({ lat: A.lat + (B.lat - A.lat) * u, lon: A.lon + 0.0004 }));
+    for (const p of pts) clickLL(p.lat, p.lon);   // from B towards A, beside the old line
+    ok('Точки стоят ровно там, где щёлкнули (без магнита)', TE.dw.wp.every((w, k) => Math.abs(w.lat - pts[k].lat) < 2e-6 && Math.abs(w.lon - pts[k].lon) < 2e-6));
     await V.teDrawDone();
     let back = 0; for (let i = g[0] + 1; i <= g[1]; i++) if (TE.pos[i] && TE.pos[i - 1] && TE.pos[i].lat < TE.pos[i - 1].lat - 1e-7) back++;
     ok('Записи идут от A к B (север), а не назад', back === 0, `шагов назад: ${back}`);

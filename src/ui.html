@@ -1614,12 +1614,12 @@ function teUi() {
     document.querySelectorAll('#teDMode button').forEach(b => b.classList.toggle('on', b.dataset.m === D.mode));
     $('teDBusy').style.display = D.routing ? 'inline' : 'none'; $('teDUndo').disabled = !D.undo.length;
     $('teHint').textContent = TE.peek ? VF_I18N.tr('Показан исходный трек — отпустите пробел')
-      : !D.wp.length ? VF_I18N.tr(D.Apt || D.Bpt ? 'Щёлкните, откуда начать — с любого места, хоть с того конца. Линия сама соединится с A и B' : 'Щёлкните, где начали поездку')
-      : VF_I18N.tr('Ставьте точки по пути · Enter или щелчок по A / B — готово · правый клик по точке — убрать · карту можно двигать');
+      : !D.wp.length ? VF_I18N.tr('Щёлкните, откуда начать — с любого места. Линия пойдёт точно по вашим точкам, без привязок')
+      : VF_I18N.tr('Ставьте точки по пути · Enter или «Готово» — готово · правый клик по точке — убрать · перетащите точку, чтобы сдвинуть');
     const L = teDwLen(), T = D.target, tot = L;
     const okc = T && D.wp.length > 1 ? (Math.abs(tot / T - 1) <= 0.08 ? '--ok' : Math.abs(tot / T - 1) <= 0.3 ? '--warn' : '--bad') : null;
     $('teStat').innerHTML = (en ? 'Drawn ' : 'Нарисовано ') + `<b>${fmt(L / 1000, 2)} ${en ? 'km' : 'км'}</b>` + (T ? (en ? ' of ' : ' из ') + `<b style="${okc ? 'color:var(' + okc + ')' : ''}">${fmt(T / 1000, 2)} ${en ? 'km' : 'км'}</b> ${en ? 'by the wheel' : 'по датчику'}` : '')
-      + (D.wp.length && (D.Apt || D.Bpt) ? ` <span class="mute">${en ? '+ joining to A/B' : '+ соединение с A/B'}</span>` : '');
+      ;
     return; }
   document.querySelectorAll('#teTool button').forEach(b => b.classList.toggle('on', b.dataset.t === TE.tool));
   $('teR').textContent = TE.tool === 'erase' ? TE.ER * 2 + ' px' : TE.R >= 1000 ? fmt(TE.R / 1000, 1) + ' км' : TE.R + ' м';
@@ -1749,7 +1749,8 @@ function teDrawStart(a, b) {
   // nothing is attached on start: the line begins where you click first and can go in either direction;
   // on «Готово» it is turned the right way and its ends are joined to the ends of the gap (A, B)
   const gap = []; for (let i = a; i <= b; i++) if (TE.pos[i]) gap.push(TE.pos[i]);   // what is there now (a straight line or a bad stretch)
-  const D = TE.dw = { a, b, noA, noB, mode: store.get('edMode', 'free'), legs: [], keys: [], undo: [], mouse: null, wp: [], gap,
+  // mode «Прямо» by default: the line goes exactly through your points
+  const D = TE.dw = { a, b, noA, noB, mode: store.get('dwMode', 'line'), legs: [], keys: [], undo: [], mouse: null, wp: [], gap,
     Apt: noA ? null : { lat: TE.pos[a].lat, lon: TE.pos[a].lon }, Bpt: noB ? null : { lat: TE.pos[b].lat, lon: TE.pos[b].lon },
     target: TE.r.hasDist ? teDist(b) - teDist(a) : null };
   TE.sel = null; TE.selA = null; TE.hover = null; TE.tool = 'draw';
@@ -1786,7 +1787,7 @@ function teNextGap(from) { // next stretch without coordinates after `from` → 
 }
 async function teDrawDone() {
   const D = TE.dw; if (!D) return; const en = VF_I18N.lang === 'en';
-  if (!D.wp.length || (D.wp.length < 2 && !D.Apt && !D.Bpt)) { toast(en ? 'Place points where you rode' : 'Поставьте точки там, где вы ехали'); return; }
+  if (D.wp.length < 2) { toast(en ? 'Place at least two points where you rode' : 'Поставьте хотя бы две точки там, где вы ехали'); return; }
   for (let k = 0; k < 800 && D.legs.some(g => !g); k++) await new Promise(r => setTimeout(r, 150));   // routing of the last legs
   if (TE.dw !== D) return;
   let line = [{ lat: D.wp[0].lat, lon: D.wp[0].lon }];
@@ -1794,11 +1795,7 @@ async function teDrawDone() {
   // drawn from B towards A? turn it the right way (records go from A to B)
   const dd = (p, q) => p && q ? VF.hav(p.lat, p.lon, q.lat, q.lon) : 0;
   if (dd(line[0], D.Apt) + dd(line[line.length - 1], D.Bpt) > dd(line[line.length - 1], D.Apt) + dd(line[0], D.Bpt)) line.reverse();
-  // join the ends of the line to the ends of the gap, along the roads in the chosen mode
-  const join = async (p, q) => { let g = null; try { g = await routeLeg(p, q, D.mode); } catch (e) {} return g && g.length >= 2 ? g : [p, q]; };
-  if (D.Apt && dd(line[0], D.Apt) > 3) line = (await join(D.Apt, line[0])).concat(line.slice(1));
-  if (D.Bpt && dd(line[line.length - 1], D.Bpt) > 3) line = line.concat((await join(line[line.length - 1], D.Bpt)).slice(1));
-  if (TE.dw !== D) return;
+  // the line is used exactly as drawn — its ends are not joined to A / B (they are only landmarks)
   let L = 0; for (let k = 1; k < line.length; k++) L += VF.hav(line[k - 1].lat, line[k - 1].lon, line[k].lat, line[k].lon);
   if (line.length < 2) { toast(en ? 'Place points where you rode' : 'Поставьте точки там, где вы ехали'); return; }
   if (D.target && D.target > 300 && Math.abs(L / D.target - 1) > 0.3 &&
@@ -1811,7 +1808,7 @@ async function teDrawDone() {
     toastAct(en ? `Gap drawn. Next gap${km ? ': ' + km : ''}.` : `Пропуск дорисован. Дальше ещё пропуск${km ? ' — ' + km : ''}.`, [[en ? 'Draw it' : 'Дорисовать', () => teDrawStart(nx[0], nx[1])], [en ? 'Later' : 'Потом', () => {}]]); }
   else toast(en ? 'Gap drawn — press «Done» to build it into the track' : 'Пропуск дорисован — нажмите «Готово», чтобы встроить его в трек', 6000);
 }
-document.querySelectorAll('#teDMode button').forEach(b => b.onclick = () => { if (!TE.dw) return; TE.dw.mode = b.dataset.m; store.set('edMode', b.dataset.m); teUi(); });
+document.querySelectorAll('#teDMode button').forEach(b => b.onclick = () => { if (!TE.dw) return; TE.dw.mode = b.dataset.m; store.set('dwMode', b.dataset.m); teUi(); });
 $('teDUndo').onclick = teDwUndo; $('teDCancel').onclick = teDrawCancel; $('teDDone').onclick = teDrawDone;
 { // pointer handling while drawing: click — a point (empty map can still be dragged to pan), drag a point — move it, right click — delete
   const cv = M.cv, rel = e => { const b = cv.getBoundingClientRect(); return [e.clientX - b.left, e.clientY - b.top]; };
@@ -1826,10 +1823,9 @@ $('teDUndo').onclick = teDwUndo; $('teDCancel').onclick = teDrawCancel; $('teDDo
     if (down && down.w != null) { e.stopImmediatePropagation(); if (down.moved) { Object.assign(D.wp[down.w], llOf(x, y)); for (const i of [down.w - 1, down.w]) if (i >= 0) D.keys[i] = null; } }
     M.draw(); }, true);
   cv.addEventListener('pointerup', e => { const D = TE.dw, d = down; down = null; if (!TE.on || !D || !d) return; const [x, y] = rel(e);
-    if (d.w != null) { e.stopImmediatePropagation(); if (d.moved) teDwRoute(); return; }
+    if (d.w != null) { e.stopImmediatePropagation(); if (d.moved) { teDwRoute(); return; } }   // a click on your own point still adds a new one
     if (d.moved) return;   // that was panning the map
-    for (const E of [D.Apt, D.Bpt]) if (E && D.wp.length) { const q = M.scr(E.lat, E.lon); if ((q[0] - x) ** 2 + (q[1] - y) ** 2 <= 144) { teDrawDone(); return; } }   // click on A or B — finish there
-    const mg = magnet(x, y) || [x, y]; teDwSnap(); D.wp.push({ ...llOf(mg[0], mg[1]), mode: D.wp.length ? D.mode : undefined }); teDwRoute(); }, true);
+    teDwSnap(); D.wp.push({ ...llOf(x, y), mode: D.wp.length ? D.mode : undefined }); teDwRoute(); }, true);   // exactly where clicked: no magnet, no snapping to A/B
   cv.addEventListener('pointerleave', () => { if (TE.dw) { TE.dw.mouse = null; M.draw(); } });
   cv.addEventListener('dblclick', e => { if (TE.on && TE.dw) { e.preventDefault(); e.stopImmediatePropagation(); } }, true);   // two quick clicks are two points, not a zoom
 }
