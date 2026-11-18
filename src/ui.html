@@ -924,6 +924,9 @@ async function prepareVirtualRide() {
     status.textContent = virtualLabel(
       `${fmt(ride.distance / 1000, 2)} км · средняя ${fmt(ride.avgSpeed * 3.6, 2)} км/ч · макс. ${fmt(ride.maxSpeed * 3.6, 1)} км/ч. Трек совмещён по началу и концу FIT.`,
       `${fmt(ride.distance / 1000, 2)} km · avg ${fmt(ride.avgSpeed * 3.6, 2)} km/h · max ${fmt(ride.maxSpeed * 3.6, 1)} km/h. The track is aligned to the start and end of the FIT.`);
+    if (ride.elevationGain != null) status.textContent += virtualLabel(
+      ` Набор высоты: ${fmt(ride.elevationGain, 0)} м.`,
+      ` Elevation gain: ${fmt(ride.elevationGain, 0)} m.`);
     for (const id of ['virtualSave', 'virtualCopy', 'virtualTextSave']) $(id).disabled = false;
   } catch (e) {
     if (revision === virtualFileRevision) status.textContent = e.message;

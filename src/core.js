@@ -158,6 +158,15 @@ const VF = (() => {
     const start = times[0], end = times.at(-1);
     const gpsStart = pts[0].t, gpsEnd = pts.at(-1).t;
     const gpxDuration = gpsEnd - gpsStart;
+    const elevations = [];
+    for (const p of pts) {
+      if (!Number.isFinite(p.ele)) continue;
+      const previous = elevations.at(-1);
+      const change = previous ? p.ele - previous.ele : 0;
+      elevations.push({ t: p.t, ele: p.ele, gain: (previous?.gain ?? 0) + Math.max(0, change),
+        loss: (previous?.loss ?? 0) + Math.max(0, -change) });
+    }
+    const hasElevation = elevations.length >= 2;
     const cumulative = [0];
     for (let i = 1; i < pts.length; i++) {
       const a = pts[i - 1], b = pts[i];
@@ -165,17 +174,32 @@ const VF = (() => {
     }
     if (cumulative.at(-1) <= 0) throw new Error('В GPX нет движения');
 
-    function pointAt(time) {
+    function gpsTime(time) {
       const fraction = (Math.max(start, Math.min(end, time)) - start) / (end - start);
-      const t = gpsStart + fraction * gpxDuration;
-      let lo = 0, hi = pts.length - 1;
+      return gpsStart + fraction * gpxDuration;
+    }
+    function segmentAt(points, t) {
+      let lo = 0, hi = points.length - 1;
       while (hi - lo > 1) {
         const mid = (lo + hi) >> 1;
-        if (pts[mid].t <= t) lo = mid; else hi = mid;
+        if (points[mid].t <= t) lo = mid; else hi = mid;
       }
-      const a = pts[lo], b = pts[hi], weight = (t - a.t) / (b.t - a.t);
+      return lo;
+    }
+    function pointAt(time) {
+      const t = gpsTime(time), lo = segmentAt(pts, t);
+      const a = pts[lo], b = pts[lo + 1], weight = (t - a.t) / (b.t - a.t);
       return { lat: a.lat + (b.lat - a.lat) * weight, lon: a.lon + (b.lon - a.lon) * weight,
-        distance: cumulative[lo] + (cumulative[hi] - cumulative[lo]) * weight };
+        distance: cumulative[lo] + (cumulative[lo + 1] - cumulative[lo]) * weight };
+    }
+    function elevationAt(time) {
+      const t = gpsTime(time);
+      if (t <= elevations[0].t) return elevations[0];
+      if (t >= elevations.at(-1).t) return elevations.at(-1);
+      const lo = segmentAt(elevations, t), a = elevations[lo], b = elevations[lo + 1];
+      const weight = (t - a.t) / (b.t - a.t);
+      return { ele: a.ele + (b.ele - a.ele) * weight, gain: a.gain + (b.gain - a.gain) * weight,
+        loss: a.loss + (b.loss - a.loss) * weight };
     }
     function put(m, number, value, type) {
       const field = m.f[number];
@@ -198,6 +222,15 @@ const VF = (() => {
       put(m, latField, point.lat / SC, 'position');
       put(m, lonField, point.lon / SC, 'position');
     }
+    const elevationFields = new Map();
+    function putElevation(m, number, value) {
+      // Add standard uint16 fields when the source device did not record them.
+      if (m.f[number]) { put(m, number, value); return; }
+      const raw = Math.round(value);
+      if (raw < 0 || raw >= 0xffff) throw new Error('Высота или набор высоты вне диапазона FIT');
+      if (!elevationFields.has(m)) elevationFields.set(m, []);
+      elevationFields.get(m).push([number, raw]);
+    }
     const speeds = records.map((m, i) => {
       if (!m.f[0] || !m.f[1] || !m.f[5] || !(m.f[6] || m.f[73]))
         throw new Error('В FIT нужны поля координат, дистанции и скорости (значения могут быть пустыми)');
@@ -208,6 +241,11 @@ const VF = (() => {
       put(m, 5, point.distance * 100);
       put(m, 6, speed * 1000);
       put(m, 73, speed * 1000);
+      if (hasElevation) {
+        const raw = (elevationAt(t).ele + 500) * 5;
+        if (m.f[78]) put(m, 78, raw);
+        if (m.f[2] || !m.f[78]) putElevation(m, 2, raw);
+      }
       return speed;
     });
     for (const m of fit.msgs.filter(m => m.g === 18 || m.g === 19)) {
@@ -229,11 +267,55 @@ const VF = (() => {
       put(m, 9, distance * 100);
       for (const f of wholeRide ? [14, 124] : [13, 110]) put(m, f, distance / seconds * 1000);
       for (const f of wholeRide ? [15, 125] : [14, 111]) put(m, f, maxSpeed * 1000);
+      if (hasElevation) {
+        const a = elevationAt(from), b = elevationAt(to);
+        putElevation(m, wholeRide ? 22 : 21, b.gain - a.gain);
+        putElevation(m, wholeRide ? 23 : 22, b.loss - a.loss);
+      }
     }
-    fit.dv.setUint16(fit.end, crc16(bytes, 0, fit.end), true);
+    const out = appendVirtualElevationFields(fit, elevationFields);
     const distance = cumulative.at(-1), timer = session.v(8) / 1000;
-    return { bytes, distance, timer, avgSpeed: distance / timer, maxSpeed: amax(speeds),
+    return { bytes: out, track: pts, distance, timer, avgSpeed: distance / timer, maxSpeed: amax(speeds),
+      elevationGain: hasElevation ? Math.round(elevations.at(-1).gain) : null,
       startOffset: gpsStart - start - FIT_EPOCH, durationDelta: gpxDuration - (end - start) };
+  }
+
+  function appendVirtualElevationFields(fit, values) {
+    const { bytes } = fit;
+    if (!values.size) {
+      fit.dv.setUint16(fit.end, crc16(bytes, 0, fit.end), true);
+      return bytes;
+    }
+    const byDefinition = new Map();
+    for (const [message, fields] of values) byDefinition.set(message.def, fields.map(([number]) => number));
+    const portions = [bytes.subarray(0, fit.hsize)];
+    for (const message of fit.msgs) {
+      const extra = byDefinition.get(message.def);
+      if (!extra) { portions.push(bytes.subarray(message.start, message.end)); continue; }
+      if (message.isDef) {
+        const { start, end } = message, header = bytes.slice(start, start + 6);
+        const fieldEnd = start + 6 + header[5] * 3;
+        if (header[5] + extra.length > 255) throw new Error('Слишком много полей в записи FIT');
+        header[5] += extra.length;
+        portions.push(header, bytes.subarray(start + 6, fieldEnd),
+          Uint8Array.from(extra.flatMap(number => [number, 2, 0x84])), bytes.subarray(fieldEnd, end));
+      } else {
+        const fields = values.get(message), appended = new Uint8Array(extra.length * 2);
+        const view = new DataView(appended.buffer);
+        for (let i = 0; i < extra.length; i++) view.setUint16(i * 2, fields[i][1], message.def.le);
+        const nativeEnd = message.dataStart + message.def.fsize;
+        portions.push(bytes.subarray(message.start, nativeEnd), appended, bytes.subarray(nativeEnd, message.end));
+      }
+    }
+    const end = portions.reduce((size, part) => size + part.length, 0);
+    const out = new Uint8Array(end + 2);
+    let offset = 0;
+    for (const part of portions) { out.set(part, offset); offset += part.length; }
+    const view = new DataView(out.buffer);
+    view.setUint32(4, end - fit.hsize, true);
+    if (fit.hsize >= 14) view.setUint16(12, crc16(out, 0, 12), true);
+    view.setUint16(end, crc16(out, 0, end), true);
+    return out;
   }
 
   // ---------- GPX track -> FIT (so a recorded GPX goes through the same repair as a FIT) ----------
