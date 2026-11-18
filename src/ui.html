@@ -117,6 +117,13 @@ body.drag #empty .box,body.drag #mapwrap{outline:3px dashed var(--acc);outline-o
 .modal.open{display:grid}
 .modal .in{background:var(--panel);border-radius:14px;max-width:680px;width:calc(100% - 32px);max-height:calc(100% - 40px);overflow:auto;padding:22px 26px;box-shadow:0 20px 60px rgba(0,0,0,.35)}
 .modal h2{margin:0 0 10px;font-size:19px}.modal ol{padding-left:20px}.modal li{margin-bottom:9px}
+#virtualDialog{box-sizing:border-box;width:min(560px,calc(100% - 32px));max-height:calc(100% - 32px);overflow:auto;border:1px solid var(--line);border-radius:14px;padding:22px;background:var(--panel);color:var(--ink)}
+#virtualDialog::backdrop{background:rgba(0,0,0,.45)}
+#virtualDialog h2{margin:0 0 14px;font-size:19px}
+#virtualDialog label{display:grid;gap:5px;margin:12px 0}
+#virtualDialog input:not([type=file]),#virtualDialog textarea{width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:inherit;font:inherit}
+#virtualDialog textarea{resize:vertical;min-height:75px}
+#virtualDialog .virtual-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
 .field{display:grid;grid-template-columns:1fr 110px;gap:10px;align-items:center;margin:8px 0}
 .field input{padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel2)}
 #toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:9px;font-weight:500;display:none;z-index:40;box-shadow:var(--shadow);max-width:80%}
@@ -139,6 +146,7 @@ body.drag #empty .box,body.drag #mapwrap{outline:3px dashed var(--acc);outline-o
   <div class="logo"><svg viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="var(--acc)"/><path d="M14 48 C24 48 20 33 31 32 C42 31 39 17 50 16" fill="none" stroke="#fff" stroke-width="5.2" stroke-linecap="round"/><circle cx="14" cy="48" r="6" fill="#fff"/><circle cx="50" cy="16" r="6" fill="#fff"/><circle cx="50" cy="16" r="2.6" fill="var(--acc)"/></svg>VELO FIX</div>
   <button class="file" id="fileBtn" disabled><b id="fileTitle">Нет тренировки</b><span id="fileSub">Откройте FIT или GPX</span></button>
   <button class="btn ic" id="addBtn" title="Добавить файлы (FIT, GPX)">＋</button>
+  <button class="btn" id="virtualBtn" title="Виртуальный заезд из FIT и GPX">Виртуальный заезд</button>
   <button class="btn ic" id="histBtn" title="Отменить последнее действие (Ctrl+Z)" disabled>↶</button>
   <button class="btn hide-narrow" id="devBtn" title="Открыть заезды с подключённого Garmin / Wahoo" style="display:none"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M9 6h6M12 18h.01"/></svg>С велокомпьютера</button>
   <div class="sp"></div>
@@ -215,6 +223,20 @@ body.drag #empty .box,body.drag #mapwrap{outline:3px dashed var(--acc);outline-o
   </aside>
 </div>
 <input type="file" id="inp" multiple accept=".fit,.gpx" hidden>
+<dialog id="virtualDialog" aria-labelledby="virtualHeading">
+  <h2 id="virtualHeading">Виртуальный заезд из FIT и GPX</h2>
+  <label><span id="virtualFitLabel">FIT с велокомпьютера</span><input id="virtualFit" type="file" accept=".fit"></label>
+  <label><span id="virtualGpxLabel">GPX из MyWhoosh</span><input id="virtualGpx" type="file" accept=".gpx"></label>
+  <label><span id="virtualNameLabel">Название в Strava</span><input id="virtualName" type="text"></label>
+  <label><span id="virtualTextLabel">Описание в Strava</span><textarea id="virtualText" rows="4"></textarea></label>
+  <p id="virtualStatus" role="status"></p>
+  <div class="virtual-actions">
+    <button class="btn p" id="virtualSave" disabled>Сохранить FIT</button>
+    <button class="btn" id="virtualCopy" disabled>Скопировать описание</button>
+    <button class="btn" id="virtualTextSave" disabled>Сохранить описание .txt</button>
+    <form method="dialog"><button class="btn" id="virtualClose">Закрыть</button></form>
+  </div>
+</dialog>
 <div class="menu" id="fileMenu"></div>
 <div class="menu" id="saveMenu"></div>
 <div class="modal" id="helpModal"><div class="in">
@@ -862,6 +884,72 @@ async function saveFile(name, data, type) {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 800); toast('Скачано в «Загрузки»: ' + name); return true;
 }
 const baseName = f => f.name.replace(/\.(fit|gpx)$/i, '');
+let virtualExport = null, virtualFileRevision = 0;
+function virtualLabel(ru, en) { return VF_I18N.lang === 'en' ? en : ru; }
+function openVirtualRide() {
+  for (const [id, ru, en] of [
+    ['virtualHeading', 'Виртуальный заезд из FIT и GPX', 'Virtual ride from FIT and GPX'],
+    ['virtualFitLabel', 'FIT с велокомпьютера', 'FIT from bike computer'],
+    ['virtualGpxLabel', 'GPX из MyWhoosh', 'GPX from MyWhoosh'],
+    ['virtualNameLabel', 'Название в Strava', 'Strava title'],
+    ['virtualTextLabel', 'Описание в Strava', 'Strava description'],
+    ['virtualSave', 'Сохранить FIT', 'Save FIT'],
+    ['virtualCopy', 'Скопировать описание', 'Copy description'],
+    ['virtualTextSave', 'Сохранить описание .txt', 'Save description .txt'],
+    ['virtualClose', 'Закрыть', 'Close']
+  ]) $(id).textContent = virtualLabel(ru, en);
+  $('virtualDialog').showModal();
+}
+async function prepareVirtualRide() {
+  const revision = ++virtualFileRevision;
+  const fitFile = $('virtualFit').files[0], gpxFile = $('virtualGpx').files[0];
+  virtualExport = null;
+  for (const id of ['virtualSave', 'virtualCopy', 'virtualTextSave']) $(id).disabled = true;
+  const status = $('virtualStatus');
+  status.textContent = '';
+  if (!fitFile || !gpxFile) return;
+  try {
+    const [fitBuffer, gpxText] = await Promise.all([fitFile.arrayBuffer(), gpxFile.text()]);
+    if (revision !== virtualFileRevision) return;
+    const ride = VF.virtualRide(new Uint8Array(fitBuffer), gpxText);
+    const doc = new DOMParser().parseFromString(gpxText, 'application/xml');
+    const track = doc.getElementsByTagNameNS('*', 'trk')[0];
+    const metadata = doc.getElementsByTagNameNS('*', 'metadata')[0];
+    const field = (element, name) => [...(element?.children || [])].find(child => child.localName === name)?.textContent.trim();
+    $('virtualName').value = field(track, 'name') || field(metadata, 'name') || baseName(gpxFile);
+    $('virtualText').value = field(track, 'desc') || field(metadata, 'desc') || virtualLabel(
+      'Виртуальный заезд на станке. Карта, дистанция и скорость по GPX. Мощность, пульс и каденс из FIT с велокомпьютера.',
+      'Virtual trainer ride. Map, distance and speed from GPX. Power, heart rate and cadence from the bike computer FIT.');
+    virtualExport = { ride, filename: baseName(gpxFile) + '_VIRTUAL' };
+    status.textContent = virtualLabel(
+      `${fmt(ride.distance / 1000, 2)} км · средняя ${fmt(ride.avgSpeed * 3.6, 2)} км/ч · макс. ${fmt(ride.maxSpeed * 3.6, 1)} км/ч. Трек совмещён по началу и концу FIT.`,
+      `${fmt(ride.distance / 1000, 2)} km · avg ${fmt(ride.avgSpeed * 3.6, 2)} km/h · max ${fmt(ride.maxSpeed * 3.6, 1)} km/h. The track is aligned to the start and end of the FIT.`);
+    for (const id of ['virtualSave', 'virtualCopy', 'virtualTextSave']) $(id).disabled = false;
+  } catch (e) {
+    if (revision === virtualFileRevision) status.textContent = e.message;
+  }
+}
+$('virtualBtn').onclick = openVirtualRide;
+$('virtualFit').onchange = $('virtualGpx').onchange = prepareVirtualRide;
+$('virtualSave').onclick = () => {
+  if (virtualExport) saveFile(virtualExport.filename + '.fit', virtualExport.ride.bytes, 'application/octet-stream');
+};
+$('virtualTextSave').onclick = () => {
+  if (!virtualExport) return;
+  const text = [$('virtualName').value.trim(), $('virtualText').value.trim()].filter(Boolean).join('\r\n\r\n');
+  saveFile(virtualExport.filename + '_STRAVA.txt', new TextEncoder().encode(text), 'text/plain');
+};
+$('virtualCopy').onclick = async () => {
+  if (!virtualExport) return;
+  const description = $('virtualText');
+  try {
+    await navigator.clipboard.writeText(description.value);
+    $('virtualStatus').textContent = virtualLabel('Описание скопировано.', 'Description copied.');
+  } catch {
+    description.focus();
+    description.select();
+  }
+};
 const outputs = f => { const enc = new TextEncoder(), b = baseName(f), r = f.res; return {
   fit: [b + '_RESTORED.fit', r.out, 'application/octet-stream'], gpx: [b + '_RESTORED.gpx', enc.encode(VF.toGpx(r)), 'application/gpx+xml'],
   tcx: [b + '_RESTORED.tcx', enc.encode(VF.toTcx(r)), 'application/xml'],

@@ -138,6 +138,103 @@ const VF = (() => {
     return { name, pts, nTime, creator };
   }
 
+  // Combine a recorded virtual track with the original sensor, time and activity messages.
+  function virtualRide(fitBytes, gpxText) {
+    const bytes = new Uint8Array(fitBytes);
+    const fit = parseFit(bytes);
+    if (!fit.crcOk) throw new Error('FIT не прошёл проверку целостности');
+    const records = fit.msgs.filter(m => m.g === 20);
+    const sessions = fit.msgs.filter(m => m.g === 18);
+    const session = sessions[0];
+    if (sessions.length !== 1 || session.v(5) !== 2 || !session.f[6])
+      throw new Error('Нужен FIT с одной велотренировкой');
+    const times = records.map(m => m.v(253) ?? m.cts);
+    if (times.length < 2 || !times.every((t, i) => Number.isFinite(t) && (!i || t >= times[i - 1])) || times[0] === times.at(-1))
+      throw new Error('В FIT нет последовательных отметок времени');
+    const { pts } = parseGpx(gpxText);
+    if (pts.length < 2 || !pts.every((p, i) => Number.isFinite(p.t) && (!i || p.t > pts[i - 1].t)
+        && Math.abs(p.lat) <= 90 && Math.abs(p.lon) <= 180))
+      throw new Error('Нужен записанный GPX с координатами и возрастающими отметками времени');
+    const start = times[0], end = times.at(-1);
+    const gpsStart = pts[0].t, gpsEnd = pts.at(-1).t;
+    const gpxDuration = gpsEnd - gpsStart;
+    const cumulative = [0];
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i];
+      cumulative.push(cumulative[i - 1] + hav(a.lat, a.lon, b.lat, b.lon));
+    }
+    if (cumulative.at(-1) <= 0) throw new Error('В GPX нет движения');
+
+    function pointAt(time) {
+      const fraction = (Math.max(start, Math.min(end, time)) - start) / (end - start);
+      const t = gpsStart + fraction * gpxDuration;
+      let lo = 0, hi = pts.length - 1;
+      while (hi - lo > 1) {
+        const mid = (lo + hi) >> 1;
+        if (pts[mid].t <= t) lo = mid; else hi = mid;
+      }
+      const a = pts[lo], b = pts[hi], weight = (t - a.t) / (b.t - a.t);
+      return { lat: a.lat + (b.lat - a.lat) * weight, lon: a.lon + (b.lon - a.lon) * weight,
+        distance: cumulative[lo] + (cumulative[hi] - cumulative[lo]) * weight };
+    }
+    function put(m, number, value, type) {
+      const field = m.f[number];
+      if (!field) return;
+      const raw = Math.round(value);
+      const { off, size, bt } = field;
+      if (type === 'position' && size === 4 && bt === 0x85) {
+        fit.dv.setInt32(off, Math.max(-2147483648, Math.min(2147483646, raw)), m.def.le);
+      } else if (type !== 'position' && size === 4 && bt === 0x86 && raw >= 0 && raw < 0xffffffff) {
+        fit.dv.setUint32(off, raw, m.def.le);
+      } else if (type !== 'position' && size === 2 && bt === 0x84 && raw >= 0 && raw < 0xffff) {
+        fit.dv.setUint16(off, raw, m.def.le);
+      } else if (type === 'enum' && size === 1 && bt === 0x00) {
+        fit.dv.setUint8(off, raw);
+      } else {
+        throw new Error('Неподдерживаемое поле координат, скорости или типа заезда в FIT');
+      }
+    }
+    function putPoint(m, latField, lonField, point) {
+      put(m, latField, point.lat / SC, 'position');
+      put(m, lonField, point.lon / SC, 'position');
+    }
+    const speeds = records.map((m, i) => {
+      if (!m.f[0] || !m.f[1] || !m.f[5] || !(m.f[6] || m.f[73]))
+        throw new Error('В FIT нужны поля координат, дистанции и скорости (значения могут быть пустыми)');
+      const t = times[i], point = pointAt(t);
+      const left = Math.max(start, t - 2.5), right = Math.min(end, t + 2.5);
+      const speed = (pointAt(right).distance - pointAt(left).distance) / (right - left);
+      putPoint(m, 0, 1, point);
+      put(m, 5, point.distance * 100);
+      put(m, 6, speed * 1000);
+      put(m, 73, speed * 1000);
+      return speed;
+    });
+    for (const m of fit.msgs.filter(m => m.g === 18 || m.g === 19)) {
+      const wholeRide = m.g === 18;
+      const from = wholeRide ? start : Math.max(start, m.v(2) ?? start);
+      const to = wholeRide ? end : Math.min(end, m.v(253) ?? end);
+      const seconds = m.v(8) / 1000;
+      if (!(seconds > 0) || to < from) throw new Error('Некорректное время заезда или круга в FIT');
+      const first = pointAt(from), last = pointAt(to), distance = last.distance - first.distance;
+      const maxSpeed = wholeRide ? amax(speeds) : amax(speeds.filter((_, i) => times[i] >= from && times[i] <= to), 0);
+      putPoint(m, 3, 4, first);
+      if (!wholeRide) putPoint(m, 5, 6, last);
+      if (wholeRide) {
+        const route = times.map(pointAt);
+        putPoint(m, 29, 30, { lat: amax(route.map(p => p.lat)), lon: amax(route.map(p => p.lon)) });
+        putPoint(m, 31, 32, { lat: amin(route.map(p => p.lat)), lon: amin(route.map(p => p.lon)) });
+        put(m, 6, 58, 'enum'); // FIT sub_sport: virtual_activity
+      }
+      put(m, 9, distance * 100);
+      for (const f of wholeRide ? [14, 124] : [13, 110]) put(m, f, distance / seconds * 1000);
+      for (const f of wholeRide ? [15, 125] : [14, 111]) put(m, f, maxSpeed * 1000);
+    }
+    fit.dv.setUint16(fit.end, crc16(bytes, 0, fit.end), true);
+    const distance = cumulative.at(-1), timer = session.v(8) / 1000;
+    return { bytes, distance, timer, avgSpeed: distance / timer, maxSpeed: amax(speeds),
+      startOffset: gpsStart - start - FIT_EPOCH, durationDelta: gpxDuration - (end - start) };
+  }
 
   // ---------- GPX track -> FIT (so a recorded GPX goes through the same repair as a FIT) ----------
   // Time gaps where the rider clearly moved are filled with GPS-less records (1 per second) with a straight-line
@@ -958,6 +1055,6 @@ const VF = (() => {
     return merged;
   }
 
-  return { amax, amin, merge, parseFit, parseGpx, gpxToFit, run, stravaCheck, toGpx, toTcx, toCsv, toReport, zip, hav, FIT_EPOCH, SC, hms };
+  return { amax, amin, merge, parseFit, parseGpx, gpxToFit, virtualRide, run, stravaCheck, toGpx, toTcx, toCsv, toReport, zip, hav, FIT_EPOCH, SC, hms };
 })();
 if (typeof module !== 'undefined') module.exports = VF;
